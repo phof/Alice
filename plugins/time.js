@@ -5,7 +5,7 @@ const moment = require('moment-timezone')
 
 module.exports = (bot) => {
   const re = /(!time) (.+$)/i
-  const query = 'select name,country,timezone to geo.places(1) where text=@city'
+  const query = 'select name,country,timezone from geo.places(1) where text=@city'
 
   bot.on('message#', (nick, to, text) => {
     let match = text.match(re)
