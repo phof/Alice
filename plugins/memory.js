@@ -7,7 +7,24 @@ module.exports = (bot, rdb) => {
   const re_forget = /(!forget) (.+$)/i
   const re_memory = /!memory/i
 
+  const okay = [
+    'Okay,',
+    'Cool,',
+    'Alright,',
+    'Yep,',
+    'Sure,',
+    'Done,',
+    'Roger,',
+    'Fine,',
+    'Yes,'
+  ]
+
   bot.on('message#', (nick, to, text) => {
+    const redisError = (err) => {
+      console.error('Error while trying to connect to Redis DB', err)
+      bot.say(to, 'Ugh, error while trying to connect to Redis DB')
+    }
+
     /*
       Remember
     */
@@ -16,13 +33,12 @@ module.exports = (bot, rdb) => {
       let word = match_remember[2].toLowerCase()
       let phrase = match_remember[3]
 
-      rdb.set('memory:' + word, phrase, function (err, reply) {
+      rdb.set('memory:' + word, phrase, (err, reply) => {
         if (err) {
-          console.error('Error while trying to connect to Redis DB', err)
-          bot.say(to, 'Ugh, error while trying to connect to Redis DB')
-          return
+          redisError(err)
+        } else {
+          bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will remember ' + word)
         }
-        bot.say(to, `I will remember "${word}"`)
       })
       return
     }
@@ -34,17 +50,19 @@ module.exports = (bot, rdb) => {
     if (match_forget) {
       let word = match_forget[2].toLowerCase()
 
-      rdb.get('memory:' + word, function (err, reply) {
+      rdb.get('memory:' + word, (err, reply) => {
         if (err) {
-          console.error('Error while trying to connect to Redis DB', err)
-          bot.say(to, 'Ugh, error while trying to connect to Redis DB')
-          return
-        }
-        if (reply) {
-          rdb.del('memory:' + word)
-          bot.say(to, `I will forget "${word}"`)
+          redisError(err)
+        } else if (reply) {
+          rdb.del('memory:' + word, (err, reply) => {
+            if (err) {
+              redisError(err)
+            } else {
+              bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will forget ' + word)
+            }
+          })
         } else {
-          bot.say(to, `${word} is not in my dictionary`)
+          bot.say(to, `${word} is not known`)
         }
       })
       return
@@ -55,15 +73,13 @@ module.exports = (bot, rdb) => {
     */
     let match_memory = text.match(re_memory)
     if (match_memory) {
-      rdb.keys('memory:*', function (err, reply) {
+      rdb.keys('memory:*', (err, reply) => {
         if (err) {
-          bot.say(to, 'Ugh, error while trying to connect to Redis DB')
-          return
-        }
-        if (reply.length > 0) {
-          bot.say(to, 'I remember the following words: ' + reply.join(', ').replace(/memory:/g, ''))
+          redisError(err)
+        } else if (reply.length > 0) {
+          bot.say(to, 'Known words: ' + reply.join(', ').replace(/memory:/g, ''))
         } else {
-          bot.say(to, "I wasn't instructed to remember anything..")
+          bot.say(to, 'There are no known words')
         }
       })
       return
@@ -74,9 +90,9 @@ module.exports = (bot, rdb) => {
     */
     let words = text.split(' ')
     let responses = []
-    async.each(words, function (word, callback) {
-      rdb.get('memory:' + word.toLowerCase(), function (err, reply) {
-        if (err) console.error('Error while trying to connect to Redis DB', err)
+    async.each(words, (word, callback) => {
+      rdb.get('memory:' + word.toLowerCase(), (err, reply) => {
+        if (err) console.error('Error while trying to connect to Redis DB', err) // not using redisError here to avoid channel spam
         if (reply) responses.push(reply) // reply is null when the key is missing
         callback()
       })
@@ -91,15 +107,16 @@ module.exports = (bot, rdb) => {
   })
 
   return {
+    name: 'Memory',
     actions: [{
       command: '!remember <word> <phrase>',
-      helptext: 'Any public mentions of <word> will trigger the bot to reply with <phrase>'
+      helptext: 'Public mentions of <word> will trigger a reply with <phrase>'
     }, {
       command: '!forget <word>',
-      helptext: 'Forget the previously recorded <word>'
+      helptext: 'Forgets <word>'
     }, {
       command: '!memory <message>',
-      helptext: 'List of known words'
+      helptext: 'Lists known words'
     }]
   }
 }

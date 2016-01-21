@@ -5,8 +5,8 @@ const Pushover = require('pushover-notifications')
 module.exports = (bot) => {
   const re_push = /(!push) (.+$)/i
   const p = new Pushover({
-    user: process.env.PUSHOVER_USER || 'YQBJZv66Hwv9qm3WgQdHgE86bRdU0R',
-    token: process.env.PUSHOVER_TOKEN || 'Xz5XrdeVrmJ5prs0MRrGFJrP7OInM2'
+    user: process.env.PUSHOVER_USER || '',
+    token: process.env.PUSHOVER_TOKEN || ''
   })
 
   bot.on('message#', (nick, to, text) => {
@@ -21,8 +21,8 @@ module.exports = (bot) => {
       }, function (err, result) {
         let results = JSON.parse(result)
         if (err || results.errors) {
-          console.error('Error while sending pushover message', err || results.errors)
-          bot.say(to, 'Ugh, error while sending pushover message')
+          console.error('Error while sending Pushover message', err || results.errors)
+          bot.say(to, 'Ugh, error while sending Pushover message')
         } else {
           bot.say(to, 'Message sent!')
         }
@@ -32,6 +32,7 @@ module.exports = (bot) => {
   })
 
   return {
+    name: 'Pushover',
     actions: [{
       command: '!push <message>',
       helptext: 'Sends a Pushover.net message to the bot owner'

@@ -31,6 +31,7 @@ module.exports = (bot) => {
   })
 
   return {
+    name: 'Time',
     actions: [{
       command: '!time <place>',
       helptext: 'Returns the current datetime at <place>'

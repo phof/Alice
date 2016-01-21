@@ -62,19 +62,10 @@ module.exports = function (bot) {
       bot.send('NICK', newnick)
       return
     }
-
-    /*
-      Disconnect
-    */
-    if (/@disconnect/i.test(text)) {
-      console.log(`${nick} requested bot to disconnect`)
-      bot.say(nick, 'Disconnecting')
-      bot.disconnect(process.env.DEFAULT_DISCONNECT || "We're all mad here.")
-      return
-    }
   })
 
   return {
+    name: 'Simple admin',
     actions: [{
       command: '@join <channel>',
       helptext: 'Joins <channel>'
@@ -90,16 +81,10 @@ module.exports = function (bot) {
     }, {
       command: '@nick <nickname>',
       helptext: 'Updates the bot <nickname>'
-    }, {
-      command: '@disconnect',
-      helptext: 'Disconnects the bot from the network'
     }]
   }
 }
 //   /*
 //     Flush Redis
 //   */
-//   if (text.match(/!forgetallplz/i)) {
-//     bot.say(nick, 'Flushing Redis DB..')
-//     rdb.flushdb()
-//   }s
+//   s

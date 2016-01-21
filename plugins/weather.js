@@ -30,6 +30,7 @@ module.exports = (bot) => {
   })
 
   return {
+    name: 'Weather',
     actions: [{
       command: '!weather <place>',
       helptext: 'Returns the current weather at <place>'

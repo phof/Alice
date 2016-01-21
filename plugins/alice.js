@@ -28,6 +28,7 @@ module.exports = function (bot) {
   })
 
   return {
+    name: 'Alice quotes',
     actions: [{
       command: '!alice',
       helptext: 'Returns a random quote from Alice in Wonderland'

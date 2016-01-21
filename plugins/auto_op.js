@@ -2,88 +2,95 @@
 
 module.exports = function (bot, rdb) {
   bot.on('join', (channel, nick, message) => {
-    console.log(`${nick} has joined ${channel}`)
-
+    let nickmask = message.prefix
     rdb.get('user:' + nick, function (err, reply) {
       if (err) console.error('Error while trying to connect to Redis DB', err)
-      if (reply) { // if our user is is the user list
-        console.log(`${nick} has been recognized, starting verification..`)
-
-        bot.whois(nick, function (info) {
-          let test_nickmask = info.nick + '!' + info.user + '@' + info.host
-
-          if (test_nickmask.match(reply)) {
-            console.log(`${nick}'s nickmask has been verified, giving op to the user.`)
-            bot.send('MODE', channel, '+o', nick)
-          } else {
-            console.log(`${nick}'s nickmask couldn't be verified, try again!`)
-          }
-        })
+      if (reply) {
+        console.log(`${nick} is a known user, checking nickmask`)
+        if (nickmask.match(reply)) {
+          console.log(`${nick}'s nickmask has been verified, OPing the user`)
+          bot.send('MODE', channel, '+o', nick)
+        } else {
+          console.log(`${nick}'s nickmask couldn't be verified`)
+        }
       }
     })
   })
 
   bot.on('pm', function (nick, text) {
+    const redisError = (err) => {
+      console.error('Error while trying to connect to Redis DB', err)
+      bot.say(nick, 'Ugh, error while trying to connect to Redis DB')
+    }
+
     /*
-      Op add (pho`!~ale@localhost)
+      Add a user to the auto OP list
+      @opadd nickname nickname!~user@localhost
     */
     let match_opadd = text.match(/(@opadd) (.+?) (.+$)/i)
     if (match_opadd) {
-      let nick = match_opadd[2]
+      let user = match_opadd[2]
       let nickmask = match_opadd[3]
-      rdb.set('user:' + nick, nickmask, function (err, reply) {
+      rdb.set('user:' + user, nickmask, function (err, reply) {
         if (err) {
-          bot.say(nick, 'Oops, there was an error while trying nick connect nick Redis DB..')
-          return
+          redisError(err)
+        } else {
+          bot.say(nick, `${user} has been added to the auto-op list`)
         }
-        bot.say(nick, nick + ' has been added nick the user list.')
       })
+      return
     }
 
     /*
-      Op remove
+      Remove a user to the auto OP list
     */
     let match_opremove = text.match(/(@opremove) (.+$)/i)
     if (match_opremove) {
-      let nick = match_opremove[2]
-    // TODO - code delete
-    // rdb.set('user:' + nick, nickmask, function (err, reply) {
-    //   if (err) {
-    //     bot.say(nick, 'Oops, there was an error while trying nick connect nick Redis DB..')
-    //     return
-    //   }
-    //   bot.say(nick, nick + ' has been added nick the user list.')
-    // })
+      let user = match_opremove[2]
+      rdb.get('user:' + user, function (err, reply) {
+        if (err) {
+          redisError(err)
+        } else if (reply) {
+          rdb.del('user:' + user, (err, reply) => {
+            if (err) {
+              redisError(err)
+            } else {
+              bot.say(nick, `${user} has been removed from the auto-op list`)
+            }
+          })
+        } else {
+          bot.say(nick, `${user} is not known`)
+        }
+      })
+      return
     }
 
     /*
-      List users
+      List users in the auto OP list
     */
     if (text.match(/@oplist/i)) {
       rdb.keys('user:*', function (err, reply) {
-        if (err) {
-          bot.say(nick, 'Oops, there was an error while trying nick connect nick Redis DB..')
-          return
-        }
+        if (err) redisError(err)
         if (reply.length > 0) {
-          bot.say(nick, 'I remember the following users: ' + reply.join(', ').replace(/user:/g, ''))
+          bot.say(nick, 'Known users: ' + reply.join(', ').replace(/user:/g, ''))
         } else {
-          bot.say(nick, `I wasn't instructed nick remember any users..`)
+          bot.say(nick, `There are no known users`)
         }
       })
     }
   })
 
   return {
+    name: 'Auto-op',
     actions: [{
       command: '@opadd <nick> <hostmask>',
-      helptext: 'TODO'
+      helptext: "Adds <nick>'s <hostmask> to the auto-op list"
     }, {
       command: '@opremove <nick>',
-      helptext: 'TODO'
+      helptext: 'Removes <nick> from the auto-op list'
     }, {
       command: '@oplist',
-      helptext: 'TODO'
+      helptext: 'Lists known users'
     }]
   }
 }

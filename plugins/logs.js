@@ -6,19 +6,20 @@ module.exports = function (bot) {
   })
 
   bot.on('message#', (nick, to, text) => {
-    console.log(`MESSAGE | Public message to ${to} from ${nick}: ${text}`)
+    let channel = to
+    console.log(`MESSAGE | Message on ${channel} from ${nick}: ${text}`)
   })
 
   bot.on('join', (channel, nick, message) => {
-    console.log(`JOIN | ${nick} has joined ${channel}`)
+    console.log(`JOIN | ${nick} joined ${channel}`)
   })
 
   bot.on('part', (channel, nick, reason, message) => {
-    console.log(`PART | ${nick} has left ${channel}`)
+    console.log(`PART | ${nick} left ${channel}`)
   })
 
   bot.on('quit', (nick, reason, channels, message) => {
-    console.log(`QUIT | ${nick} has left ${channels}`)
+    console.log(`QUIT | ${nick} left ${channels}`)
   })
 
   bot.on('names', (channel, nicks) => {
@@ -26,7 +27,12 @@ module.exports = function (bot) {
     console.log(`NAMES | ${channel} members: ${nicks}`)
   })
 
+  bot.on('ctcp-version', (from, to, message) => {
+    console.log(`VERSION | CTCP VERSION from ${message.prefix}`)
+  })
+
   return {
+    name: 'Simple log',
     actions: []
   }
 }
