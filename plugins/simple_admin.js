@@ -58,7 +58,7 @@ module.exports = function (bot) {
     if (match_nick) {
       let newnick = match_nick[2]
       console.log(`${nick} requested bot to change nick to ${newnick}`)
-      bot.say(nick, 'Changing nick to ${newnick}')
+      bot.say(nick, `Changing nick to ${newnick}`)
       bot.send('NICK', newnick)
       return
     }
@@ -84,7 +84,3 @@ module.exports = function (bot) {
     }]
   }
 }
-//   /*
-//     Flush Redis
-//   */
-//   s
