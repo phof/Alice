@@ -55,10 +55,6 @@ bot.on('pm', (nick, text) => {
 })
 
 /*
-  Idle functions
-*/
-
-/*
   Listen for other errors
 */
 bot.on('error', function (err) {
@@ -67,4 +63,10 @@ bot.on('error', function (err) {
 
 rdb.on('error', function (err) {
   console.error('Redis error', err)
+})
+
+process.on('SIGTERM', function () {
+  bot.disconnect('Cycling..', () = > {
+    process.exit(0);
+  })
 })
