@@ -57,16 +57,16 @@ bot.on('pm', (nick, text) => {
 /*
   Listen for other errors
 */
-bot.on('error', function (err) {
+bot.on('error', (err) => {
   console.error('Bot error', err)
 })
 
-rdb.on('error', function (err) {
+rdb.on('error', (err) => {
   console.error('Redis error', err)
 })
 
-process.on('SIGTERM', function () {
-  bot.disconnect('Cycling..', () = > {
+process.on('SIGTERM', () => {
+  bot.disconnect('Cycling..', () => {
     process.exit(0);
   })
 })
