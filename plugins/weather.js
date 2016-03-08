@@ -20,7 +20,7 @@ module.exports = (bot) => {
             let weather = response.query.results.channel
             bot.say(to, `The current weather in ${weather.location.city}, ${weather.location.country} is ${weather.item.condition.temp}${weather.units.temperature} and ${weather.item.condition.text}`)
           } catch(e) {
-            console.error('Error while parsing results for ${cityname}', e)
+            console.error(`Error while parsing results for ${cityname}`, e)
             bot.say(to, `Oops, couldn't get weather data for ${cityname}`)
           }
         }
