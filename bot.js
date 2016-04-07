@@ -27,9 +27,9 @@ const plugins = [
   require('./plugins/alice.js')(bot),
   require('./plugins/time.js')(bot),
   require('./plugins/weather.js')(bot),
-  require('./plugins/pushover.js')(bot),
+  // require('./plugins/pushover.js')(bot),
   require('./plugins/memory.js')(bot, rdb),
-// added by Pekyntosh  
+  // added by Pekyntosh  
   require('./plugins/temp.js')(bot)
 ]
 
