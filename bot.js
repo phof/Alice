@@ -1,5 +1,3 @@
-/* second pull attempt */
-
 'use strict'
 
 const irc = require('irc')
@@ -31,6 +29,8 @@ const plugins = [
   require('./plugins/weather.js')(bot),
   require('./plugins/pushover.js')(bot),
   require('./plugins/memory.js')(bot, rdb)
+// added by Pekyntosh  
+  require('./plugins/temp.js')(bot),
 ]
 
 console.log('Plugins length: ' + _.size(plugins))
