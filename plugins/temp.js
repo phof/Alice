@@ -4,9 +4,9 @@ var request = require("request");
 
 module.exports = function(bot) {
 	const cmd = /!temp/i;
-	const url = "http://scrock.dyndns.byteriot.it:20060/temp";
+	const url = process.env.PEK_URL + ":20060/temp"
 	const fp_res = "The temperature at Pekyntosh's home is "; // first part response
-	const sp_res = "C"// second part response
+	const sp_res = "C" // second part response
 	const error_res = "I'm sorry but the sensor is not available";
 	
 	bot.on('message#', (nick, to, text) => {
@@ -27,7 +27,7 @@ module.exports = function(bot) {
 		name: 'IOT home temperature',
 		actions: [{
 			command: '!temp',
-			helptext: 'Internet Of Things: returns Pekyntosh\'s home temperature provided by ESP8266 device and ds18b20 sensor (work in progress)'
+			helptext: 'Internet Of Things: returns Pekyntosh\'s home temperature provided by ESP8266 device with DS18b20 sensor (work in progress)'
 		}]
 	};
 }
