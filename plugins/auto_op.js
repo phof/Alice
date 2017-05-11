@@ -1,11 +1,14 @@
 'use strict'
 
 module.exports = function (bot, rdb) {
-  const re = [/(@opadd) (.+?) (.+$)/i, /(@opremove) (.+$)/i, /@oplist/i]
+  const re = [
+    /(@opadd) (.+?) (.+$)/i,
+    /(@opremove) (.+$)/i,
+    /@oplist/i
+  ]
 
   bot.on('join', (channel, nick, message) => {
     let nickmask = message.prefix
-    console.log(nickmask)
     rdb.get('user:' + nick, function (err, reply) {
       if (err) console.error('Error while trying to connect to Redis DB', err)
       if (reply) {

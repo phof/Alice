@@ -5,6 +5,7 @@ module.exports = function (bot, rdb) {
     /@flushdb/i,
     /@disconnect/i
   ]
+
   bot.on('pm', (nick, text) => {
     if (text.match(re[0])) {
       bot.say(nick, 'Flushing Redis DB')
