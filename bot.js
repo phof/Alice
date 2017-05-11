@@ -14,7 +14,8 @@ const bot = new irc.Client(
     autoRejoin: true,
     floodProtection: true,
     floodProtectionDelay: 300,
-    retryDelay: 5000
+    retryDelay: 5000,
+    debug: true
   }
 )
 
