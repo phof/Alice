@@ -15,7 +15,9 @@ const bot = new irc.Client(
     floodProtection: true,
     floodProtectionDelay: 300,
     retryDelay: 5000,
-    debug: true
+    debug: true,
+    millisecondsOfSilenceBeforePingSent: 30 * 1000,
+    millisecondsBeforePingTimeout: 10 * 1000
   }
 )
 
