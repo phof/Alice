@@ -1,8 +1,11 @@
 'use strict'
 
 module.exports = function (bot, rdb) {
+  const re = [/(@opadd) (.+?) (.+$)/i, /(@opremove) (.+$)/i, /@oplist/i]
+
   bot.on('join', (channel, nick, message) => {
     let nickmask = message.prefix
+    console.log(nickmask)
     rdb.get('user:' + nick, function (err, reply) {
       if (err) console.error('Error while trying to connect to Redis DB', err)
       if (reply) {
@@ -27,10 +30,10 @@ module.exports = function (bot, rdb) {
       Add a user to the auto OP list
       @opadd nickname nickname!~user@localhost
     */
-    let match_opadd = text.match(/(@opadd) (.+?) (.+$)/i)
-    if (match_opadd) {
-      let user = match_opadd[2]
-      let nickmask = match_opadd[3]
+    let matchOpAdd = text.match(re[0])
+    if (matchOpAdd) {
+      let user = matchOpAdd[2]
+      let nickmask = matchOpAdd[3]
       rdb.set('user:' + user, nickmask, function (err, reply) {
         if (err) {
           redisError(err)
@@ -44,9 +47,9 @@ module.exports = function (bot, rdb) {
     /*
       Remove a user to the auto OP list
     */
-    let match_opremove = text.match(/(@opremove) (.+$)/i)
-    if (match_opremove) {
-      let user = match_opremove[2]
+    let matchOpRemove = text.match(re[1])
+    if (matchOpRemove) {
+      let user = matchOpRemove[2]
       rdb.get('user:' + user, function (err, reply) {
         if (err) {
           redisError(err)
@@ -68,7 +71,8 @@ module.exports = function (bot, rdb) {
     /*
       List users in the auto OP list
     */
-    if (text.match(/@oplist/i)) {
+    let matchOpList = text.match(re[2])
+    if (matchOpList) {
       rdb.keys('user:*', function (err, reply) {
         if (err) redisError(err)
         if (reply.length > 0) {
@@ -84,7 +88,7 @@ module.exports = function (bot, rdb) {
     name: 'Auto-op',
     actions: [{
       command: '@opadd <nick> <hostmask>',
-      helptext: "Adds <nick>'s <hostmask> to the auto-op list"
+      helptext: "Adds <nick>'s <hostmask> to the auto-op list, i.e.: @opadd nick nick!~user@localhost"
     }, {
       command: '@opremove <nick>',
       helptext: 'Removes <nick> from the auto-op list'

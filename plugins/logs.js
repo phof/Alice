@@ -2,12 +2,12 @@
 
 module.exports = function (bot) {
   bot.on('pm', (nick, text) => {
-    console.log(`PM | Private message from ${nick}: ${text}`)
+    console.log(`PM | Private message from ${nick}`)
   })
 
   bot.on('message#', (nick, to, text) => {
     let channel = to
-    console.log(`MESSAGE | Message on ${channel} from ${nick}: ${text}`)
+    console.log(`MESSAGE | Message on ${channel} from ${nick}`)
   })
 
   bot.on('join', (channel, nick, message) => {

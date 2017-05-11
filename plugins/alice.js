@@ -18,12 +18,11 @@ module.exports = function (bot) {
   ]
 
   bot.on('message#', function (nick, to, text) {
-    let rand_quote = quotes[Math.floor(Math.random() * quotes.length)]
+    let randQuote = quotes[Math.floor(Math.random() * quotes.length)]
 
     if (re.test(text)) {
-      console.log(`Sending message to ${to}: ${rand_quote}`)
-      bot.say(to, rand_quote)
-      return
+      console.log(`Sending message to ${to}: ${randQuote}`)
+      bot.say(to, randQuote)
     }
   })
 

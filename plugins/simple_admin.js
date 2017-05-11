@@ -2,12 +2,20 @@
 
 module.exports = function (bot) {
   bot.on('pm', function (nick, text) {
+    const re = [
+      /(@join) ([#&][^\x07\x2C\s]{0,200})/i,
+      /(@part) ([#&][^\x07\x2C\s]{0,200})/i,
+      /(@op) ([#&][^\x07\x2C\s]{0,200})/i,
+      /(@say) (#?[^\x07\x2C\s]{0,200}) (.+$)/i,
+      /(@nick) (.+$)/i
+    ]
+
     /*
       Join channel
     */
-    let match_join = text.match(/(@join) ([#&][^\x07\x2C\s]{0,200})/i)
-    if (match_join) {
-      let channel = match_join[2]
+    let matchJoin = text.match(re[0])
+    if (matchJoin) {
+      let channel = matchJoin[2]
       console.log(`${nick} requested bot to join ${channel}`)
       bot.say(nick, `Joining ${channel}`)
       bot.join(channel)
@@ -17,9 +25,9 @@ module.exports = function (bot) {
     /*
       Part channel
     */
-    let match_part = text.match(/(@part) ([#&][^\x07\x2C\s]{0,200})/i)
-    if (match_part) {
-      let channel = match_part[2]
+    let matchPart = text.match(re[1])
+    if (matchPart) {
+      let channel = matchPart[2]
       console.log(`${nick} requested bot to part ${channel}`)
       bot.say(nick, `Parting ${channel}`)
       bot.part(channel)
@@ -29,9 +37,9 @@ module.exports = function (bot) {
     /*
       Op
     */
-    let match_op = text.match(/(@op) ([#&][^\x07\x2C\s]{0,200})/i)
-    if (match_op) {
-      let channel = match_op[2]
+    let matchOp = text.match(re[2])
+    if (matchOp) {
+      let channel = matchOp[2]
       console.log(`${nick} requested OP in ${channel}`)
       bot.say(nick, `OPing you in ${channel}`)
       bot.send('MODE', channel, '+o', nick)
@@ -41,10 +49,10 @@ module.exports = function (bot) {
     /*
       Say
     */
-    let match_say = text.match(/(@say) (#?[^\x07\x2C\s]{0,200}) (.+$)/i)
-    if (match_say) {
-      let who = match_say[2]
-      let what = match_say[3]
+    let matchSay = text.match(re[3])
+    if (matchSay) {
+      let who = matchSay[2]
+      let what = matchSay[3]
       console.log(`${nick} requested bot to message ${who}: ${what}`)
       bot.say(nick, `Sending message to ${who}: ${what}`)
       bot.say(who, what)
@@ -54,13 +62,12 @@ module.exports = function (bot) {
     /*
       Swap nickname
     */
-    let match_nick = text.match(/(@nick) (.+$)/i)
-    if (match_nick) {
-      let newnick = match_nick[2]
+    let matchNick = text.match(re[4])
+    if (matchNick) {
+      let newnick = matchNick[2]
       console.log(`${nick} requested bot to change nick to ${newnick}`)
       bot.say(nick, `Changing nick to ${newnick}`)
       bot.send('NICK', newnick)
-      return
     }
   })
 

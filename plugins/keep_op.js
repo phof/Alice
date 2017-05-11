@@ -19,17 +19,16 @@ module.exports = function (bot) {
 
   bot.on('names', (channel, nicks) => {
     let usercount = _.size(nicks)
-
-    if (nicks[bot.nick] !== '@' && usercount === 1) {
-      console.log(`Cycling ${channel}`)
-      bot.part(channel)
-      bot.join(channel)
-    }
-
-    if (nicks[bot.nick] === '@' && usercount === 1) {
-      console.log(`No other users on ${channel}, resetting topic/mode`)
-      bot.send('MODE', channel, '+sn')
-      bot.send('TOPIC', channel, process.env.DEFAULT_TOPIC || 'Imagination is the only weapon in the war against reality')
+    if (usercount === 1) {
+      if (nicks[bot.nick] !== '@') {
+        console.log(`No op, cycling ${channel}..`)
+        bot.part(channel)
+        bot.join(channel)
+      } else {
+        console.log(`No other users on ${channel}, resetting topic/mode`)
+        bot.send('MODE', channel, '+sn')
+        bot.send('TOPIC', channel, process.env.DEFAULT_TOPIC || 'Imagination is the only weapon in the war against reality')
+      }
     }
   })
 
