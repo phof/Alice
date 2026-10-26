@@ -19,6 +19,7 @@ import seen from './plugins/seen.js'
 import tell from './plugins/tell.js'
 import remind from './plugins/remind.js'
 import flood from './plugins/flood.js'
+import greet from './plugins/greet.js'
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)))
 
@@ -45,7 +46,8 @@ const plugins = [
   memory,
   seen,
   tell,
-  remind
+  remind,
+  greet
 ].map(plugin => plugin({ bot, db, config, admins }))
 
 createRouter(bot, admins, plugins, { rateLimit: config.rateLimit })

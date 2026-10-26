@@ -13,6 +13,7 @@ import seen from '../plugins/seen.js'
 import tell from '../plugins/tell.js'
 import remind from '../plugins/remind.js'
 import flood from '../plugins/flood.js'
+import greet, { greetings, welcomeBacks, fill as fillGreeting } from '../plugins/greet.js'
 import { fakeBot, message } from './helpers.js'
 
 const db = createClient({ url: process.env.TEST_REDIS_URL || 'redis://127.0.0.1:6379/15', disableOfflineQueue: true })
@@ -32,7 +33,8 @@ after(async () => { if (db.isOpen) await db.close(); else db.destroy() })
 const config = {
   admins: ['*!*@trusted'],
   memoryCooldown: 30,
-  flood: { enabled: true, lines: 8, seconds: 6, repeats: 4, banMinutes: 15 }
+  flood: { enabled: true, lines: 8, seconds: 6, repeats: 4, banMinutes: 15 },
+  greet: { enabled: true, afterDays: 3 }
 }
 
 function setup (...plugins) {
@@ -237,4 +239,70 @@ redisTest('flood: repeated messages, normal chat and admins', async () => {
   bot.sent.length = 0
   for (let i = 0; i < 20; i++) await check(message({ hostname: 'trusted', target: '#c', message: 'x' }), now + i)
   assert.deepEqual(bot.sent, [])
+})
+
+const DAY = 24 * 3600 * 1000
+const joiner = (nick, channel = '#c') => ({ nick, ident: `~${nick}`, hostname: 'example.com', channel })
+// Turns a greeting template into a regex that matches it filled in
+const templateRegex = (template, vars) =>
+  new RegExp('^' + fillGreeting(template, vars).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('AWAY', '.+') + '$')
+const isOneOf = (text, templates, vars) => templates.some(t => templateRegex(t, vars).test(text))
+
+test('greet: fill', () => {
+  assert.equal(fillGreeting('Hi $nick, welcome to $channel ($away)', { nick: 'bob', channel: '#a$&b', away: '3d' }), 'Hi bob, welcome to #a$&b (3d)')
+})
+
+redisTest('greet: first time, not again soon, welcome back after 3 days', async () => {
+  const { bot, plugins } = setup(greet)
+  const { onJoin } = plugins[0]
+  const now = Date.now()
+
+  await onJoin(joiner('Carol'), now)
+  assert.equal(bot.sent.length, 1)
+  assert.equal(bot.sent[0][1], '#c')
+  assert.ok(isOneOf(bot.sent[0][2], greetings, { nick: 'Carol', channel: '#c' }), bot.sent[0][2])
+
+  // rejoins within 3 days: nothing
+  await onJoin(joiner('carol'), now + DAY)
+  await onJoin(joiner('CAROL'), now + 3 * DAY)
+  assert.equal(bot.sent.length, 1)
+
+  // back after more than 3 days away
+  await onJoin(joiner('Carol'), now + 6.5 * DAY)
+  assert.equal(bot.sent.length, 2)
+  assert.ok(isOneOf(bot.sent[1][2], welcomeBacks, { nick: 'Carol', channel: '#c', away: 'AWAY' }), bot.sent[1][2])
+  assert.match(bot.sent[1][2], /3d 12h|Welcome back to #c/)
+
+  // channels are separate
+  await onJoin(joiner('Carol', '#other'), now + 6.5 * DAY)
+  assert.equal(bot.sent.length, 3)
+  assert.equal(bot.sent[2][1], '#other')
+})
+
+redisTest('greet: people already there, talking or leaving count as seen', async () => {
+  const { bot, plugins, say } = setup(greet)
+  const { onJoin } = plugins[0]
+  bot.emit('userlist', { channel: '#c', users: [{ nick: 'Alice', modes: ['o'] }, { nick: 'dave', modes: [] }] })
+  await say('hello', 'erin')
+  bot.emit('part', { channel: '#c', nick: 'frank' })
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  for (const nick of ['dave', 'erin', 'frank']) await onJoin(joiner(nick))
+  await onJoin(joiner('Alice')) // the bot itself
+  assert.deepEqual(bot.sent, [])
+})
+
+redisTest('greet: a join flood gets at most 3 greetings', async () => {
+  const { bot, plugins } = setup(greet)
+  const now = Date.now()
+  for (let i = 0; i < 20; i++) await plugins[0].onJoin(joiner(`bot${i}`), now + i)
+  assert.equal(bot.sent.length, 3)
+})
+
+redisTest('greet: GREET=false records but stays quiet', async () => {
+  const bot = fakeBot()
+  const quiet = greet({ bot, db, config: { ...config, greet: { enabled: false, afterDays: 3 } } })
+  await quiet.onJoin(joiner('gina'))
+  assert.deepEqual(bot.sent, [])
+  assert.ok(await db.exists('greet:#c:gina'))
 })

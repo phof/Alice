@@ -66,6 +66,8 @@ All settings come from environment variables.
 | `FLOOD_LINES`, `FLOOD_SECONDS` | `8`, `6` | More than 8 messages in 6 seconds is flooding |
 | `FLOOD_REPEATS` | `4` | The same message 4 times in a minute is spam |
 | `FLOOD_BAN_MINUTES` | `15` | How long flood bans last |
+| `GREET` | `true` | Set to `false` to stop greeting people who join |
+| `GREET_AFTER_DAYS` | `3` | Greet people again when they come back after this many days away |
 | `MEMORY_COOLDOWN` | `30` | Minimum seconds between two memory replies in a channel |
 | `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot is alone in a channel |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
@@ -89,6 +91,15 @@ then stops working. The owner can't be removed from IRC, and from there you can 
 
 Locked out, e.g. after an IP change? Restart the bot with `BOT_RECLAIM=true` to get a new code,
 then claim again and remove the variable.
+
+## Greetings
+
+When someone joins a channel for the first time the bot has seen them there, it greets them in the
+channel with a random line, e.g. "bob fell down the rabbit hole and landed in #wonderland. Welcome!".
+When they come back after 3 or more days away it welcomes them back ("Welcome back, bob! It's been
+4d 2h."). Being in the channel, talking or leaving all count as being seen, so rejoins after a
+netsplit aren't greeted. At most 3 greetings go out per channel at a time, then one every 20 seconds,
+so a join flood can't make the bot flood. The lines are in `plugins/greet.js`.
 
 ## Rate limiting and flood protection
 

@@ -83,6 +83,8 @@ REDIS_URL=redis://127.0.0.1:6379
 #BOT_ADMINS=
 #FLOOD_PROTECTION=true
 #MEMORY_COOLDOWN=30
+#GREET=true
+#GREET_AFTER_DAYS=3
 #BOT_RECLAIM=false
 CONF
 chown root:alice /etc/alice/alice.env
