@@ -1,1 +1,0 @@
-app: node bot.js

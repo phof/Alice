@@ -18,6 +18,7 @@ import memory from './plugins/memory.js'
 import seen from './plugins/seen.js'
 import tell from './plugins/tell.js'
 import remind from './plugins/remind.js'
+import flood from './plugins/flood.js'
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)))
 
@@ -29,6 +30,7 @@ throttle(bot)
 const plugins = [
   // Logs
   logs,
+  flood,
 
   // Private commands
   adminCommands,
@@ -46,7 +48,7 @@ const plugins = [
   remind
 ].map(plugin => plugin({ bot, db, config, admins }))
 
-createRouter(bot, admins, plugins)
+createRouter(bot, admins, plugins, { rateLimit: config.rateLimit })
 console.log('Plugins loaded', plugins.map(p => p.name).join(', '))
 
 // Once Redis is up, print a claim code if the bot has no owner yet

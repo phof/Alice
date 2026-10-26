@@ -9,6 +9,7 @@ export function fakeBot () {
   bot.caseCompare = (a, b) => a.toLowerCase() === b.toLowerCase()
   bot.sent = []
   bot.say = (target, message) => bot.sent.push(['say', target, message])
+  bot.sayNow = bot.say
   bot.notice = (target, message) => bot.sent.push(['notice', target, message])
   bot.raw = (...args) => bot.sent.push(['raw', ...args])
   bot.join = (channel) => bot.sent.push(['join', channel])

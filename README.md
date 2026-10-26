@@ -35,6 +35,11 @@ All settings come from environment variables.
 | `BOT_ADMINS` | | Optional extra comma-separated hostmasks allowed to use `@` commands |
 | `BOT_RECLAIM` | `false` | Print a new claim code at startup even if the bot has an owner |
 | `REDIS_URL` | `redis://localhost:6379` | |
+| `RATE_LIMIT_BURST`, `RATE_LIMIT_INTERVAL` | `5`, `6` | Commands per user: a burst of 5, then one every 6 seconds |
+| `FLOOD_PROTECTION` | `true` | Set to `false` to turn channel flood protection off |
+| `FLOOD_LINES`, `FLOOD_SECONDS` | `8`, `6` | More than 8 messages in 6 seconds is flooding |
+| `FLOOD_REPEATS` | `4` | The same message 4 times in a minute is spam |
+| `FLOOD_BAN_MINUTES` | `15` | How long flood bans last |
 | `MEMORY_COOLDOWN` | `30` | Minimum seconds between two memory replies in a channel |
 | `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot is alone in a channel |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
@@ -58,6 +63,19 @@ then stops working. The owner can't be removed from IRC, and from there you can 
 
 Locked out, e.g. after an IP change? Restart the bot with `BOT_RECLAIM=true` to get a new code,
 then claim again and remove the variable.
+
+## Rate limiting and flood protection
+
+- **Commands** are rate limited per `user@host`, so changing nick doesn't help. The first time someone
+  hits the limit they get a notice; after that their commands are ignored until the limit refills.
+  Admins aren't limited for `@` commands.
+- **Channels**: flooding or repeating the same message is an offence. The first offence gets a warning,
+  the second a kick, the third a ban on `*!*@host` for 15 minutes. There's a 10 second grace period
+  after each step, and offences are forgotten after 10 minutes of good behaviour. Admins are exempt.
+  Ban expiry is stored in Redis, so bans are still lifted after a restart.
+  **Kicks and bans only work if the bot is a channel operator.**
+- **Outgoing**: the bot spaces out its own messages and drops them if more than 50 are waiting, so it
+  can't be tricked into flooding the server.
 
 ## Commands
 

@@ -12,6 +12,7 @@ import memory, { normalize, fill } from '../plugins/memory.js'
 import seen from '../plugins/seen.js'
 import tell from '../plugins/tell.js'
 import remind from '../plugins/remind.js'
+import flood from '../plugins/flood.js'
 import { fakeBot, message } from './helpers.js'
 
 const db = createClient({ url: process.env.TEST_REDIS_URL || 'redis://127.0.0.1:6379/15', disableOfflineQueue: true })
@@ -28,14 +29,18 @@ before(async () => {
 beforeEach(async () => { if (!skip) await db.flushDb() })
 after(async () => { if (db.isOpen) await db.close(); else db.destroy() })
 
-const config = { admins: [], memoryCooldown: 30 }
+const config = {
+  admins: ['*!*@trusted'],
+  memoryCooldown: 30,
+  flood: { enabled: true, lines: 8, seconds: 6, repeats: 4, banMinutes: 15 }
+}
 
 function setup (...plugins) {
   const bot = fakeBot()
   bot.connected = true
   const admins = createAdmins(db, config)
   const loaded = plugins.map(p => p({ bot, db, config, admins }))
-  createRouter(bot, admins, loaded)
+  createRouter(bot, admins, loaded, { rateLimit: { burst: 1000, interval: 1 } })
   // Sends a message and waits for the bot to settle (no new output for 50ms)
   const say = async (text, nick = 'bob', target = '#c') => {
     bot.emit('privmsg', message({ nick, target, message: text }))
@@ -164,4 +169,59 @@ redisTest('remind: kept while the bot is offline', async () => {
   bot.connected = false
   await plugins[0].deliverDue(Date.now() + 120_000)
   assert.equal(await db.zCard('reminders'), 1)
+})
+
+redisTest('flood: warns, kicks, then bans with a timed unban', async () => {
+  const { bot, plugins } = setup(flood)
+  const { check, liftBans } = plugins[0]
+  const spammer = message({ nick: 'mallory', ident: '~m', hostname: 'evil.example', target: '#c' })
+  let now = Date.now()
+  const burst = async () => {
+    now += 11_000 // past the grace period
+    for (let i = 0; i < 9; i++) await check({ ...spammer, message: `line ${i}` }, now++)
+  }
+
+  await burst()
+  assert.match(bot.sent.at(-1)[2], /^mallory: please stop flooding/)
+  await burst()
+  assert.deepEqual(bot.sent.at(-1).slice(0, 4), ['raw', 'KICK', '#c', 'mallory'])
+
+  bot.sent.length = 0
+  await burst()
+  assert.deepEqual(bot.sent[0], ['raw', 'MODE', '#c', '+b', '*!*@evil.example'])
+  assert.equal(await db.zCard('unbans'), 1)
+
+  await liftBans(now + 14 * 60_000)
+  assert.equal(await db.zCard('unbans'), 1)
+  await liftBans(now + 16 * 60_000)
+  assert.deepEqual(bot.sent.at(-1), ['raw', 'MODE', '#c', '-b', '*!*@evil.example'])
+  assert.equal(await db.zCard('unbans'), 0)
+})
+
+redisTest('flood: grace period after a warning', async () => {
+  const { bot, plugins } = setup(flood)
+  const now = Date.now()
+  // 20 lines in one go: warned once, not kicked
+  for (let i = 0; i < 20; i++) await plugins[0].check(message({ target: '#c', message: `x${i}` }), now + i)
+  assert.equal(bot.sent.length, 1)
+  assert.match(bot.sent[0][2], /please stop flooding/)
+})
+
+redisTest('flood: repeated messages, normal chat and admins', async () => {
+  const { bot, plugins } = setup(flood)
+  const { check } = plugins[0]
+  const now = Date.now()
+
+  // normal conversation: 8 lines spread over a minute
+  for (let i = 0; i < 8; i++) await check(message({ target: '#c', message: `hi ${i}` }), now + i * 7000)
+  assert.deepEqual(bot.sent, [])
+
+  // the same message 4 times within a minute
+  for (let i = 0; i < 4; i++) await check(message({ nick: 'eve', ident: 'e', target: '#c', message: 'BUY CHEAP TEA' }), now + i * 10_000)
+  assert.match(bot.sent.at(-1)[2], /^eve: please stop repeating/)
+
+  // admins are exempt
+  bot.sent.length = 0
+  for (let i = 0; i < 20; i++) await check(message({ hostname: 'trusted', target: '#c', message: 'x' }), now + i)
+  assert.deepEqual(bot.sent, [])
 })
