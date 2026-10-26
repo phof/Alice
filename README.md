@@ -81,7 +81,8 @@ CLAIM | To become the bot owner, message it: /msg Alice @claim RCVFr3LwE4JVaavk
 ```
 
 Send that message and you become the owner, matched by your current `*!ident@host`. The code
-then stops working. The owner can't be removed from IRC, and from there you can add admins:
+then stops working. The owner can't be removed from IRC, and the owner and admins are opped
+automatically when they join a channel (if the bot has op). From there you can add admins:
 
 - `@adminadd <nick>` adds an online user by their current host (looked up with WHOIS), or
   `@adminadd <nick!user@host>` adds a mask with `*` and `?` wildcards.
@@ -111,12 +112,16 @@ so a join flood can't make the bot flood. The lines are in `plugins/greet.js`.
   after each step, and offences are forgotten after 10 minutes of good behaviour. Admins are exempt.
   Ban expiry is stored in Redis, so bans are still lifted after a restart.
   **Kicks and bans only work if the bot is a channel operator.**
-- **Outgoing**: the bot spaces out its own messages and drops them if more than 50 are waiting, so it
-  can't be tricked into flooding the server.
+- **Outgoing**: the bot follows the standard ircd flood limits for clients
+  ([RFC 1459 §8.10](https://www.rfc-editor.org/rfc/rfc1459#section-8.10)), which IRCnet uses: a burst
+  of 4 lines, then one line every 2 seconds, so the server never disconnects it for "Excess Flood". Replies wait in a queue, which drops
+  new lines once 50 are waiting (reminders and `!tell` deliveries are never dropped). Kicks, bans and
+  other commands go out immediately.
 
 ## Commands
 
-`!help` (in a channel) and `@help` (in a private message) list commands.
+`!help` (in a channel) and `@help` (in a private message) list the commands in one line.
+`!help <command>` or `@help <command>` explains one, e.g. `!help remind`.
 
 Public:
 

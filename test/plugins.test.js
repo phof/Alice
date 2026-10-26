@@ -49,6 +49,42 @@ test('auto-op: ops matching hostmasks only', async () => {
   assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'Bob']])
 })
 
+test('auto-op: the owner and admins are always opped', async () => {
+  const { bot } = setup(autoOp)
+  bot.emit('join', message({ channel: '#c', nick: 'boss', hostname: 'trusted' }))
+  bot.emit('join', message({ channel: '#c', nick: 'rando', hostname: 'elsewhere' }))
+  await tick()
+  await tick()
+  assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'boss']])
+})
+
+test('auto-op: @oplist shows everyone opped on join', async () => {
+  const { db, say, bot } = setup(autoOp)
+  db.mGet = async (keys) => keys.map(k => db.data.get(k) ?? null)
+  // only BOT_ADMINS (*!*@trusted) so far
+  await say('Alice', '@oplist', { hostname: 'trusted' })
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: admins *!*@trusted')
+
+  await say('Alice', '@opadd Bob bob!~bob@*.example.com', { hostname: 'trusted' })
+  await say('Alice', '@oplist', { hostname: 'trusted' })
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: admins *!*@trusted · auto-op bob (bob!~bob@*.example.com)')
+})
+
+test('auto-op: @oplist includes the owner and admins from Redis', async () => {
+  const bot = fakeBot()
+  const db = fakeDb()
+  db.mGet = async (keys) => keys.map(k => db.data.get(k) ?? null)
+  const admins = {
+    isAdmin: async () => true,
+    owner: async () => '*!~me@home',
+    admins: async () => ['*!~carol@carol.net']
+  }
+  createRouter(bot, admins, [autoOp({ bot, db, config: { admins: [] }, admins })])
+  bot.emit('privmsg', message({ target: 'Alice', message: '@oplist' }))
+  for (let i = 0; i < 5; i++) await tick()
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: owner *!~me@home · admins *!~carol@carol.net')
+})
+
 test('auto-op: migrates mixed-case entries to IRC-lowercase keys', async () => {
   const { db } = setup(autoOp)
   const plugin = autoOp({ bot: fakeBot(), db, config })

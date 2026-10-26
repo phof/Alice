@@ -54,11 +54,23 @@ test('reports handler errors instead of crashing', async (t) => {
   assert.match(bot.sent[0][2], /something went wrong/)
 })
 
-test('help lists public commands via notice', async () => {
+test('help: one line with the command names, by notice', async () => {
   const { bot } = setup()
   bot.emit('privmsg', message({ target: '#chan', message: '!help' }))
   await tick()
-  assert.ok(bot.sent.every(([type, to]) => type === 'notice' && to === 'bob'))
-  assert.ok(bot.sent.some(([, , text]) => text.startsWith('!echo')))
-  assert.ok(!bot.sent.some(([, , text]) => text.startsWith('@')))
+  assert.deepEqual(bot.sent, [['notice', 'bob', 'Commands: !echo !boom !help · !help <command> for details']])
+})
+
+test('help: details for one command, with or without the prefix', async () => {
+  const { bot } = setup()
+  for (const text of ['!help echo', '!help !echo', '!help secret', '!help @secret']) {
+    bot.emit('privmsg', message({ target: '#chan', message: text }))
+  }
+  await tick()
+  assert.deepEqual(bot.sent.map(s => s[2]), [
+    '!echo : echo',
+    '!echo : echo',
+    "There's no !secret command. Try !help",
+    "There's no !secret command. Try !help"
+  ])
 })
