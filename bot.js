@@ -15,6 +15,9 @@ import alice from './plugins/alice.js'
 import time from './plugins/time.js'
 import weather from './plugins/weather.js'
 import memory from './plugins/memory.js'
+import seen from './plugins/seen.js'
+import tell from './plugins/tell.js'
+import remind from './plugins/remind.js'
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)))
 
@@ -37,7 +40,10 @@ const plugins = [
   alice,
   time,
   weather,
-  memory
+  memory,
+  seen,
+  tell,
+  remind
 ].map(plugin => plugin({ bot, db, config, admins }))
 
 createRouter(bot, admins, plugins)

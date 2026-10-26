@@ -14,6 +14,8 @@ BOT_SERVER=open.ircnet.net BOT_CHANNELS='#mychannel' yarn start
 Then claim the bot, see [Owner and admins](#owner-and-admins).
 
 `yarn dev` restarts the bot on file changes, `yarn test` runs the tests and `yarn lint` checks style.
+Some tests need Redis: they use `TEST_REDIS_URL` (default `redis://127.0.0.1:6379/15`, **flushed** by
+the tests) and are skipped if it isn't reachable.
 
 ## Configuration
 
@@ -33,6 +35,7 @@ All settings come from environment variables.
 | `BOT_ADMINS` | | Optional extra comma-separated hostmasks allowed to use `@` commands |
 | `BOT_RECLAIM` | `false` | Print a new claim code at startup even if the bot has an owner |
 | `REDIS_URL` | `redis://localhost:6379` | |
+| `MEMORY_COOLDOWN` | `30` | Minimum seconds between two memory replies in a channel |
 | `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot is alone in a channel |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
 
@@ -60,7 +63,18 @@ then claim again and remove the variable.
 
 `!help` (in a channel) and `@help` (in a private message) list commands.
 
-Public: `!alice`, `!time <place>`, `!weather <place>`, `!remember <word> <phrase>`, `!forget <word>`, `!memory`.
+Public:
+
+| Command | |
+| --- | --- |
+| `!alice` | A random Alice in Wonderland quote |
+| `!time <place>`, `!weather <place>` | Current time or weather |
+| `!seen <nick>` | When `<nick>` was last seen in a channel, and what they said |
+| `!tell <nick> <message>` | Passes `<message>` on the next time `<nick>` speaks |
+| `!remind <in 2h\|1h30m\|10 minutes> <message>` | Reminds you in the channel; survives restarts |
+| `!remember <word> <phrase>` | When someone mentions `<word>`, reply with `<phrase>` (or one of several). `$nick` and `$channel` are filled in |
+| `!memory [word]` | Lists known words, or the numbered phrases for `[word]` |
+| `!forget <word> [number]` | Forgets a word, or just one of its phrases |
 
 Admin, by private message: `@join`, `@part`, `@op`, `@say`, `@nick`, `@opadd <nick> <hostmask>`,
 `@opremove <nick>`, `@oplist`, `@adminadd`, `@admindel`, `@adminlist`, `@owner`.

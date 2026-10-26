@@ -1,0 +1,167 @@
+/*
+  Plugin tests against a real Redis. Uses TEST_REDIS_URL, by default database 15 on
+  localhost, which is FLUSHED before each test. Skipped if Redis isn't reachable.
+*/
+import { test, before, beforeEach, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { createClient } from 'redis'
+import { createRouter } from '../lib/commands.js'
+import { createAdmins } from '../lib/admins.js'
+import { parseDuration, formatDuration } from '../lib/duration.js'
+import memory, { normalize, fill } from '../plugins/memory.js'
+import seen from '../plugins/seen.js'
+import tell from '../plugins/tell.js'
+import remind from '../plugins/remind.js'
+import { fakeBot, message } from './helpers.js'
+
+const db = createClient({ url: process.env.TEST_REDIS_URL || 'redis://127.0.0.1:6379/15', disableOfflineQueue: true })
+db.on('error', () => {})
+let skip = false
+
+before(async () => {
+  try {
+    await Promise.race([db.connect(), new Promise((resolve, reject) => setTimeout(reject, 1000))])
+  } catch {
+    skip = 'Redis not reachable, set TEST_REDIS_URL'
+  }
+})
+beforeEach(async () => { if (!skip) await db.flushDb() })
+after(async () => { if (db.isOpen) await db.close(); else db.destroy() })
+
+const config = { admins: [], memoryCooldown: 30 }
+
+function setup (...plugins) {
+  const bot = fakeBot()
+  bot.connected = true
+  const admins = createAdmins(db, config)
+  const loaded = plugins.map(p => p({ bot, db, config, admins }))
+  createRouter(bot, admins, loaded)
+  // Sends a message and waits for the bot to settle (no new output for 50ms)
+  const say = async (text, nick = 'bob', target = '#c') => {
+    bot.emit('privmsg', message({ nick, target, message: text }))
+    let count = -1
+    while (count !== bot.sent.length) {
+      count = bot.sent.length
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    return bot.sent.at(-1)?.[2]
+  }
+  return { bot, say, plugins: loaded }
+}
+
+const redisTest = (name, fn) => test(name, async (t) => {
+  if (skip) return t.skip(skip)
+  await fn(t)
+})
+
+test('durations', () => {
+  assert.deepEqual(parseDuration('in 2h take tea'), { ms: 7_200_000, rest: 'take tea' })
+  assert.deepEqual(parseDuration('1h 30m stand up'), { ms: 5_400_000, rest: 'stand up' })
+  assert.deepEqual(parseDuration('10 minutes call mum'), { ms: 600_000, rest: 'call mum' })
+  assert.equal(parseDuration('tomorrow call mum'), null)
+  assert.equal(formatDuration(7_380_000), '2h 3m')
+  assert.equal(formatDuration(45_000), '45s')
+})
+
+test('memory: helpers', () => {
+  assert.equal(normalize('Alice?!'), 'alice')
+  assert.equal(fill('Hello $nick, welcome to $channel', { nick: 'bob', channel: '#c' }), 'Hello bob, welcome to #c')
+})
+
+redisTest('memory: several phrases, $nick, forget one or all', async () => {
+  const { bot, say } = setup(memory)
+  assert.match(await say('!remember tea It is always tea-time, $nick'), /will remember tea$/)
+  assert.match(await say('!remember Tea Off with their heads!'), /\(2 phrases\)/)
+  assert.match(await say('!remember tea Off with their heads!'), /already know/)
+
+  bot.sent.length = 0
+  await say('anyone for tea?', 'carol')
+  assert.ok(['It is always tea-time, carol', 'Off with their heads!'].includes(bot.sent[0][2]))
+
+  bot.sent.length = 0
+  await say('!memory tea')
+  assert.deepEqual(bot.sent.map(s => s[2]), ['1. It is always tea-time, $nick', '2. Off with their heads!'])
+
+  assert.match(await say('!forget tea 2'), /forgot "Off with their heads!"/)
+  assert.match(await say('!forget tea 5'), /no phrase #5/)
+  assert.match(await say('!forget tea'), /will forget tea/)
+  assert.equal(await db.exists('memory:tea'), 0)
+})
+
+redisTest('memory: cooldown per channel', async () => {
+  const { bot, say } = setup(memory)
+  await say('!remember tea Tea!')
+  bot.sent.length = 0
+  await say('tea')
+  await say('tea again')
+  await say('tea', 'bob', '#other')
+  assert.deepEqual(bot.sent, [['say', '#c', 'Tea!'], ['say', '#other', 'Tea!']])
+})
+
+redisTest('memory: migrates old single-phrase memories', async () => {
+  const { plugins } = setup(memory)
+  await db.set('memory:hatter', 'Why is a raven like a writing-desk?')
+  await plugins[0].migrate()
+  assert.deepEqual(await db.sMembers('memory:hatter'), ['Why is a raven like a writing-desk?'])
+})
+
+redisTest('seen: messages and events', async () => {
+  const { bot, say } = setup(seen)
+  assert.equal(await say('!seen carol'), "I haven't seen carol")
+  await say('hello there', 'Carol')
+  assert.match(await say('!seen CAROL'), /^Carol was last seen \d+s ago in #c, saying: hello there$/)
+
+  bot.emit('quit', { nick: 'Carol', message: 'bye' })
+  assert.match(await say('!seen carol'), /^Carol was last seen \d+s ago quitting \(bye\)$/)
+
+  // private messages are not recorded
+  await say('secret', 'dave', 'Alice')
+  assert.equal(await say('!seen dave'), "I haven't seen dave")
+  assert.match(await say('!seen bob'), /mirror/)
+})
+
+redisTest('tell: delivered once when the person speaks', async () => {
+  const { bot, say } = setup(tell)
+  assert.match(await say('!tell Carol the Queen wants to see you'), /I'll tell Carol/)
+  assert.match(await say('!tell bob hi'), /yourself/)
+
+  bot.sent.length = 0
+  await say('morning all', 'carol')
+  assert.match(bot.sent[0][2], /^carol: bob said \d+s ago: the Queen wants to see you$/)
+
+  bot.sent.length = 0
+  await say('still here', 'carol')
+  assert.deepEqual(bot.sent, [])
+})
+
+redisTest('tell: limits pending messages', async () => {
+  const { say } = setup(tell)
+  for (let i = 0; i < 10; i++) await say(`!tell carol ${i}`)
+  assert.match(await say('!tell carol one too many'), /already has 10 messages/)
+})
+
+redisTest('remind: stored in Redis and delivered when due', async () => {
+  const { bot, say, plugins } = setup(remind)
+  assert.match(await say('!remind tomorrow tea'), /Usage/)
+  assert.match(await say('!remind in 2h'), /Usage/)
+  assert.match(await say('!remind in 2h take the tea out'), /remind you in 2h$/)
+  assert.equal(await db.zCard('reminders'), 1)
+
+  const { deliverDue } = plugins[0]
+  bot.sent.length = 0
+  await deliverDue(Date.now() + 3_600_000)
+  assert.deepEqual(bot.sent, [])
+
+  await deliverDue(Date.now() + 7_300_000)
+  assert.match(bot.sent[0][2], /^bob: reminder from 2h \dm ago: take the tea out$/)
+  assert.equal(bot.sent[0][1], '#c')
+  assert.equal(await db.zCard('reminders'), 0)
+})
+
+redisTest('remind: kept while the bot is offline', async () => {
+  const { bot, say, plugins } = setup(remind)
+  await say('!remind 1m stretch')
+  bot.connected = false
+  await plugins[0].deliverDue(Date.now() + 120_000)
+  assert.equal(await db.zCard('reminders'), 1)
+})

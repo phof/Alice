@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRouter } from '../lib/commands.js'
 import { createAdmins } from '../lib/admins.js'
-import memory, { normalize } from '../plugins/memory.js'
 import autoOp from '../plugins/auto_op.js'
 import keepOp from '../plugins/keep_op.js'
 import weather, { describe } from '../plugins/weather.js'
@@ -17,7 +16,6 @@ function fakeDb () {
     get: async (k) => data.get(k) ?? null,
     set: async (k, v) => { data.set(k, v) },
     del: async (k) => Number(data.delete(k)),
-    mGet: async (keys) => keys.map(k => data.get(k) ?? null),
     async * scanIterator ({ MATCH }) {
       const prefix = MATCH.replace('*', '')
       yield [...data.keys()].filter(k => k.startsWith(prefix))
@@ -38,33 +36,6 @@ function setup (plugin) {
   }
   return { bot, db, say }
 }
-
-test('memory: normalizes punctuation', () => {
-  assert.equal(normalize('Alice?!'), 'alice')
-  assert.equal(normalize('"tea-time",'), 'tea-time')
-})
-
-test('memory: remember, recall, list, forget', async () => {
-  const { bot, db, say } = setup(memory)
-  await say('#c', '!remember Tea It is always tea-time')
-  assert.equal(db.data.get('memory:tea'), 'It is always tea-time')
-
-  bot.sent.length = 0
-  await say('#c', 'anyone for tea?')
-  assert.deepEqual(bot.sent, [['say', '#c', 'It is always tea-time']])
-
-  bot.sent.length = 0
-  await say('#c', 'nothing to see here')
-  assert.deepEqual(bot.sent, [])
-
-  await say('#c', '!memory')
-  assert.equal(bot.sent.at(-1)[2], 'Known words: tea')
-
-  await say('#c', '!forget tea')
-  assert.ok(!db.data.has('memory:tea'))
-  await say('#c', '!forget tea')
-  assert.equal(bot.sent.at(-1)[2], 'tea is not known')
-})
 
 test('auto-op: ops matching hostmasks only', async () => {
   const { bot, db, say } = setup(autoOp)
