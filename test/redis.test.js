@@ -32,7 +32,7 @@ after(async () => { if (db.isOpen) await db.close(); else db.destroy() })
 
 const config = {
   admins: ['*!*@trusted'],
-  memoryCooldown: 30,
+  memoryCooldown: 2,
   flood: { enabled: true, lines: 8, seconds: 6, repeats: 4, banMinutes: 15 },
   greet: { enabled: true, afterDays: 3 }
 }
