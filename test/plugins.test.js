@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRouter } from '../lib/commands.js'
+import { createAdmins } from '../lib/admins.js'
 import memory, { normalize } from '../plugins/memory.js'
 import autoOp from '../plugins/auto_op.js'
 import keepOp from '../plugins/keep_op.js'
@@ -24,16 +25,16 @@ function fakeDb () {
   }
 }
 
-const config = { admins: ['*!*@trusted'], adminAccounts: [], defaultTopic: 'topic' }
+const config = { admins: ['*!*@trusted'], defaultTopic: 'topic' }
 
 function setup (plugin) {
   const bot = fakeBot()
   const db = fakeDb()
-  createRouter(bot, config, [plugin({ bot, db, config })])
+  const admins = createAdmins({ get: async () => null, sMembers: async () => [] }, config)
+  createRouter(bot, admins, [plugin({ bot, db, config, admins })])
   const say = async (target, text, extra) => {
     bot.emit('privmsg', message({ target, message: text, ...extra }))
-    await tick()
-    await tick()
+    for (let i = 0; i < 5; i++) await tick()
   }
   return { bot, db, say }
 }

@@ -8,8 +8,10 @@ Requires Node.js 22+ and Redis.
 
 ```sh
 yarn install
-BOT_SERVER=irc.libera.chat BOT_TLS=true BOT_ADMINS='me!*@user/me' yarn start
+BOT_SERVER=open.ircnet.net BOT_CHANNELS='#mychannel' yarn start
 ```
+
+Then claim the bot, see [Owner and admins](#owner-and-admins).
 
 `yarn dev` restarts the bot on file changes, `yarn test` runs the tests and `yarn lint` checks style.
 
@@ -28,14 +30,31 @@ All settings come from environment variables.
 | `BOT_USERNAME` | `alice` | |
 | `BOT_REALNAME` | `What is a Caucus-race?` | |
 | `BOT_CHANNELS` | `#wonderland` | Comma-separated |
-| `BOT_ADMINS` | | Comma-separated hostmasks allowed to use `@` commands, i.e. `me!*@user/me` |
-| `BOT_ADMIN_ACCOUNTS` | | Comma-separated services accounts allowed to use `@` commands (needs IRCv3 `account-tag`) |
+| `BOT_ADMINS` | | Optional extra comma-separated hostmasks allowed to use `@` commands |
+| `BOT_RECLAIM` | `false` | Print a new claim code at startup even if the bot has an owner |
 | `REDIS_URL` | `redis://localhost:6379` | |
 | `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot is alone in a channel |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
 
-If neither `BOT_ADMINS` nor `BOT_ADMIN_ACCOUNTS` is set, admin commands are disabled. Prefer
-cloaked hosts (`*!*@user/me`) or services accounts: a plain hostname is easy to spoof.
+## Owner and admins
+
+The first time the bot starts, it prints a one-time code to its logs:
+
+```
+CLAIM | To become the bot owner, message it: /msg Alice @claim RCVFr3LwE4JVaavk
+```
+
+Send that message and you become the owner, matched by your current `*!ident@host`. The code
+then stops working. The owner can't be removed from IRC, and from there you can add admins:
+
+- `@adminadd <nick>` adds an online user by their current host (looked up with WHOIS), or
+  `@adminadd <nick!user@host>` adds a mask with `*` and `?` wildcards.
+- `@admindel <mask>` and `@adminlist` remove and list admins.
+- `@owner <mask>` lets the owner change their own mask, i.e. `@owner *!~me@*.myisp.net`
+  if your IP changes often. Be careful: a mask that is too broad lets others in.
+
+Locked out, e.g. after an IP change? Restart the bot with `BOT_RECLAIM=true` to get a new code,
+then claim again and remove the variable.
 
 ## Commands
 
@@ -44,7 +63,7 @@ cloaked hosts (`*!*@user/me`) or services accounts: a plain hostname is easy to 
 Public: `!alice`, `!time <place>`, `!weather <place>`, `!remember <word> <phrase>`, `!forget <word>`, `!memory`.
 
 Admin, by private message: `@join`, `@part`, `@op`, `@say`, `@nick`, `@opadd <nick> <hostmask>`,
-`@opremove <nick>`, `@oplist`.
+`@opremove <nick>`, `@oplist`, `@adminadd`, `@admindel`, `@adminlist`, `@owner`.
 
 Time and weather data come from [Open-Meteo](https://open-meteo.com/), no API key needed.
 
@@ -67,5 +86,5 @@ export default function ({ bot }) {
 ```
 
 Commands starting with `!` work in channels; commands starting with `@` work in private messages and only
-for admins. Plugins can also listen to any [irc-framework](https://github.com/kiwiirc/irc-framework)
+for admins (unless the command sets `access: 'anyone'`, like `@claim`). Plugins can also listen to any [irc-framework](https://github.com/kiwiirc/irc-framework)
 event with `bot.on(...)`. Add the plugin to the list in `bot.js` to load it.

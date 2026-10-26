@@ -1,9 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRouter } from '../lib/commands.js'
+import { createAdmins } from '../lib/admins.js'
 import { fakeBot, message, tick } from './helpers.js'
 
-const config = { admins: ['admin!*@trusted.example'], adminAccounts: ['root'] }
+const db = { get: async () => null, sMembers: async () => ['*!*@root.example'] }
+const admins = createAdmins(db, { admins: ['admin!*@trusted.example'] })
 
 function setup () {
   const bot = fakeBot()
@@ -15,7 +17,7 @@ function setup () {
       { command: '!boom', helptext: 'throws', handler: async () => { throw new Error('boom') } }
     ]
   }
-  createRouter(bot, config, [plugin])
+  createRouter(bot, admins, [plugin])
   return { bot, calls }
 }
 
@@ -32,13 +34,14 @@ test('refuses admin commands from strangers', async () => {
   const { bot } = setup()
   bot.emit('privmsg', message({ target: 'Alice', message: '@secret' }))
   await tick()
+  await tick()
   assert.match(bot.sent[0][2], /not on the guest list/)
 })
 
-test('allows admins by hostmask or account', async () => {
+test('allows admins from env or Redis', async () => {
   const { bot } = setup()
   bot.emit('privmsg', message({ nick: 'admin', hostname: 'trusted.example', target: 'Alice', message: '@secret' }))
-  bot.emit('privmsg', message({ account: 'Root', target: 'Alice', message: '@secret' }))
+  bot.emit('privmsg', message({ hostname: 'root.example', target: 'Alice', message: '@secret' }))
   await tick()
   assert.deepEqual(bot.sent, [['say', 'admin', 'ok'], ['say', 'bob', 'ok']])
 })

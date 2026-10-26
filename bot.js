@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs'
 import { Client } from 'irc-framework'
 import config from './lib/config.js'
 import { createRouter } from './lib/commands.js'
+import { createAdmins } from './lib/admins.js'
 import { throttle } from './lib/throttle.js'
 import { connectRedis } from './db/redis.js'
 
 import logs from './plugins/logs.js'
+import adminCommands from './plugins/admins.js'
 import simpleAdmin from './plugins/simple_admin.js'
 import keepOp from './plugins/keep_op.js'
 import autoOp from './plugins/auto_op.js'
@@ -18,6 +20,7 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 
 const bot = new Client()
 const db = connectRedis(config.redisUrl)
+const admins = createAdmins(db, config)
 throttle(bot)
 
 const plugins = [
@@ -25,6 +28,7 @@ const plugins = [
   logs,
 
   // Private commands
+  adminCommands,
   simpleAdmin,
   keepOp,
   autoOp,
@@ -34,14 +38,20 @@ const plugins = [
   time,
   weather,
   memory
-].map(plugin => plugin({ bot, db, config }))
+].map(plugin => plugin({ bot, db, config, admins }))
 
-createRouter(bot, config, plugins)
+createRouter(bot, admins, plugins)
 console.log('Plugins loaded', plugins.map(p => p.name).join(', '))
 
-if (config.admins.length === 0 && config.adminAccounts.length === 0) {
-  console.warn('No BOT_ADMINS or BOT_ADMIN_ACCOUNTS set: @admin commands are disabled')
-}
+// Once Redis is up, print a claim code if the bot has no owner yet
+db.once('ready', async () => {
+  try {
+    const code = await admins.prepareClaim({ reclaim: config.reclaim })
+    if (code) console.log(`CLAIM | To become the bot owner, message it: /msg ${config.irc.nick} @claim ${code}`)
+  } catch (err) {
+    console.error('Could not check the bot owner', err.message)
+  }
+})
 
 bot.on('registered', () => {
   console.log(`Connected to ${config.irc.host} as ${bot.user.nick}`)
