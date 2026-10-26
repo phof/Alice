@@ -7,8 +7,9 @@ const MAX_WORDS = 30
 // "Alice?" and "alice," should both trigger "alice"
 export const normalize = (word) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
 
+// Replacer functions, so "$&" and friends in a channel name are inserted literally
 export const fill = (phrase, { nick, channel }) =>
-  phrase.replace(/\$nick\b/gi, nick).replace(/\$channel\b/gi, channel)
+  phrase.replace(/\$nick\b/gi, () => nick).replace(/\$channel\b/gi, () => channel)
 
 /*
   Each word maps to a Redis set of phrases: memory:<word>
@@ -37,7 +38,8 @@ export default function ({ bot, db, config }) {
   bot.on('privmsg', async (e) => {
     const channel = e.target
     if (!bot.network.isChannelName(channel) || e.message.startsWith('!')) return
-    if (Date.now() - (lastReply.get(channel) ?? 0) < config.memoryCooldown * 1000) return
+    const cooldownKey = bot.caseLower(channel)
+    if (Date.now() - (lastReply.get(cooldownKey) ?? 0) < config.memoryCooldown * 1000) return
 
     const words = [...new Set(e.message.split(/\s+/).map(normalize).filter(Boolean))].slice(0, MAX_WORDS)
     if (words.length === 0) return
@@ -45,7 +47,7 @@ export default function ({ bot, db, config }) {
     try {
       const replies = (await Promise.all(words.map(w => db.sRandMember(key(w))))).filter(Boolean)
       if (replies.length === 0) return
-      lastReply.set(channel, Date.now())
+      lastReply.set(cooldownKey, Date.now())
       // if a message mentions several known words, take a random one
       bot.say(channel, fill(pick(replies), { nick: e.nick, channel }))
     } catch (err) {

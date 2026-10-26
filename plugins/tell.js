@@ -14,7 +14,7 @@ export default function ({ bot, db }) {
       const [messages] = await db.multi().lRange(k, 0, -1).del(k).exec()
       for (const raw of messages) {
         const m = JSON.parse(raw)
-        bot.say(e.target, `${e.nick}: ${m.from} said ${ago(m.time)}: ${m.text}`)
+        bot.say(e.target, `${e.nick}: ${m.from} said ${ago(m.time)}: ${m.text}`, { important: true })
       }
     } catch (err) {
       console.error('Tell delivery failed', err.message)

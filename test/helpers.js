@@ -5,8 +5,9 @@ export function fakeBot () {
   const bot = new EventEmitter()
   bot.user = { nick: 'Alice' }
   bot.network = { isChannelName: (name) => /^[#&]/.test(name) }
-  bot.caseLower = (s) => s.toLowerCase()
-  bot.caseCompare = (a, b) => a.toLowerCase() === b.toLowerCase()
+  // rfc1459 casemapping, like IRCnet: []\\ are the uppercase of {}|
+  bot.caseLower = (s) => s.toLowerCase().replace(/[[\]\\]/g, c => ({ '[': '{', ']': '}', '\\': '|' })[c])
+  bot.caseCompare = (a, b) => bot.caseLower(a) === bot.caseLower(b)
   bot.sent = []
   bot.say = (target, message) => bot.sent.push(['say', target, message])
   bot.sayNow = bot.say

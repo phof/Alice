@@ -3,6 +3,9 @@ import { userKey } from '../lib/ratelimit.js'
 import { formatDuration } from '../lib/duration.js'
 
 const UNBANS = 'unbans'
+// The bot may have lost op when a ban expires, so send the unban a few times
+const UNBAN_ATTEMPTS = 3
+const UNBAN_RETRY = 10 * 60_000
 
 /*
   Basic channel flood/spam protection. Offences are:
@@ -74,9 +77,13 @@ export default function ({ bot, db, config, admins }) {
     if (!db.isReady || !bot.connected) return
     for (const raw of await db.zRangeByScore(UNBANS, 0, now)) {
       if (!await db.zRem(UNBANS, raw)) continue
-      const { channel, mask } = JSON.parse(raw)
+      const { channel, mask, attempt = 1 } = JSON.parse(raw)
       console.log(`FLOOD | Lifting ban on ${mask} in ${channel}`)
       bot.raw('MODE', channel, '-b', mask)
+      if (attempt < UNBAN_ATTEMPTS) {
+        const retry = JSON.stringify({ channel, mask, attempt: attempt + 1 })
+        await db.zAdd(UNBANS, { score: now + UNBAN_RETRY, value: retry })
+      }
     }
   }
 

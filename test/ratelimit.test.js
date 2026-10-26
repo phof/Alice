@@ -58,3 +58,24 @@ test('throttle: spaces out lines and drops them when the queue is full', async (
   // the first line goes out immediately, three more were queued
   assert.deepEqual(bot.sent.map(s => s[2]), ['line 0', 'line 1', 'line 2', 'line 3'])
 })
+
+test('throttle: important lines are queued even when the queue is full', async (t) => {
+  t.mock.method(console, 'warn', () => {})
+  const { throttle } = await import('../lib/throttle.js')
+  const bot = fakeBot()
+  throttle(bot, { delay: 1, maxQueue: 2 })
+  for (let i = 0; i < 5; i++) bot.say('#c', `spam ${i}`)
+  bot.say('#c', 'bob: reminder', { important: true })
+  await new Promise(resolve => setTimeout(resolve, 50))
+  assert.deepEqual(bot.sent.map(s => s[2]), ['spam 0', 'spam 1', 'spam 2', 'bob: reminder'])
+})
+
+test('config: empty or invalid numbers fall back to the default', async () => {
+  const { num } = await import('../lib/config.js')
+  assert.equal(num(undefined, 8), 8)
+  assert.equal(num('', 8), 8)
+  assert.equal(num('  ', 8), 8)
+  assert.equal(num('abc', 8), 8)
+  assert.equal(num('0', 8), 0)
+  assert.equal(num('12', 8), 12)
+})

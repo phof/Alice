@@ -5,11 +5,20 @@ export default function ({ bot, admins }) {
   const resolveMask = (arg) => new Promise((resolve) => {
     if (isValidMask(arg)) return resolve(arg)
     if (/[!@*?\s]/.test(arg)) return resolve(null)
-    const timer = setTimeout(() => resolve(null), 5000)
-    bot.whois(arg, (e) => {
+
+    // Own listener rather than bot.whois(), so it can be removed on timeout
+    const done = (mask) => {
       clearTimeout(timer)
-      resolve(e.error || !e.hostname ? null : `*!${e.ident}@${e.hostname}`)
-    })
+      bot.removeListener('whois', onWhois)
+      resolve(mask)
+    }
+    const onWhois = (e) => {
+      if (!bot.caseCompare(e.nick, arg)) return
+      done(e.error || !e.hostname ? null : `*!${e.ident}@${e.hostname}`)
+    }
+    const timer = setTimeout(() => done(null), 5000)
+    bot.on('whois', onWhois)
+    bot.raw('WHOIS', arg)
   })
 
   return {

@@ -16,6 +16,7 @@ function fakeDb () {
     get: async (k) => data.get(k) ?? null,
     set: async (k, v) => { data.set(k, v) },
     del: async (k) => Number(data.delete(k)),
+    on: () => {},
     async * scanIterator ({ MATCH }) {
       const prefix = MATCH.replace('*', '')
       yield [...data.keys()].filter(k => k.startsWith(prefix))
@@ -48,6 +49,18 @@ test('auto-op: ops matching hostmasks only', async () => {
   assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'Bob']])
 })
 
+test('auto-op: migrates mixed-case entries to IRC-lowercase keys', async () => {
+  const { db } = setup(autoOp)
+  const plugin = autoOp({ bot: fakeBot(), db, config })
+  db.data.set('user:Bob', 'bob!*@*')
+  db.data.set('user:Carol', 'old')
+  db.data.set('user:carol', 'new')
+  db.rename = async (a, b) => { db.data.set(b, db.data.get(a)); db.data.delete(a) }
+  db.exists = async (k) => Number(db.data.has(k))
+  await plugin.migrate()
+  assert.deepEqual([...db.data.entries()].sort(), [['user:bob', 'bob!*@*'], ['user:carol', 'new']])
+})
+
 test('auto-op: rejects malformed masks', async () => {
   const { bot, db, say } = setup(autoOp)
   await say('Alice', '@opadd bob .*', { hostname: 'trusted' })
@@ -65,11 +78,16 @@ test('keep-op: resets the channel when alone with op, cycles without', () => {
   assert.deepEqual(bot.sent, [['part', '#c'], ['join', '#c']])
 })
 
-test('keep-op: checks names when someone leaves', () => {
+test('keep-op: checks names when someone leaves, batched', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
   const { bot } = setup(keepOp)
   bot.emit('join', { channel: '#c', nick: 'Alice' })
-  bot.emit('quit', { nick: 'bob' })
-  bot.emit('part', { channel: '#d', nick: 'bob' })
+  // a netsplit: hundreds of quits at once
+  for (let i = 0; i < 300; i++) bot.emit('quit', { nick: `user${i}` })
+  bot.emit('part', { channel: '#D', nick: 'bob' })
+  assert.deepEqual(bot.sent, [])
+
+  t.mock.timers.tick(3000)
   assert.deepEqual(bot.sent, [['raw', 'NAMES', '#c'], ['raw', 'NAMES', '#d']])
 })
 

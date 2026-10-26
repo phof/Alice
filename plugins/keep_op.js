@@ -5,14 +5,29 @@
 export default function ({ bot, config }) {
   const joined = new Set()
   const isMe = (nick) => bot.caseCompare(nick, bot.user.nick)
-  const names = (channel) => bot.raw('NAMES', channel)
+
+  // Batch NAMES requests: a netsplit can make hundreds of users quit at once,
+  // and one NAMES per quit per channel would get the bot disconnected for flooding
+  const pending = new Set()
+  let timer = null
+  const names = (channel) => {
+    pending.add(bot.caseLower(channel))
+    timer ??= setTimeout(() => {
+      timer = null
+      pending.forEach(c => bot.raw('NAMES', c))
+      pending.clear()
+    }, 3000)
+  }
 
   bot.on('join', (e) => { if (isMe(e.nick)) joined.add(bot.caseLower(e.channel)) })
   bot.on('part', (e) => isMe(e.nick) ? joined.delete(bot.caseLower(e.channel)) : names(e.channel))
   bot.on('kick', (e) => isMe(e.kicked) ? joined.delete(bot.caseLower(e.channel)) : names(e.channel))
   // QUIT doesn't say which channels the user was on, so check them all
   bot.on('quit', (e) => { if (!isMe(e.nick)) joined.forEach(names) })
-  bot.on('close', () => joined.clear())
+  bot.on('close', () => {
+    joined.clear()
+    pending.clear()
+  })
 
   bot.on('userlist', ({ channel, users }) => {
     if (users.length !== 1 || !isMe(users[0].nick)) return

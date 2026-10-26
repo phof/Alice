@@ -21,9 +21,11 @@ function fakeDb () {
 
 function setup (config = { admins: [] }) {
   const bot = fakeBot()
-  bot.whois = (nick, done) => {
-    const found = { nick, ident: '~carol', hostname: 'carol.example.net' }
-    done(nick === 'carol' ? found : { nick, error: 'not_found' })
+  // answer WHOIS for carol, stay silent for anyone else (like a lagging server)
+  bot.raw = (cmd, nick) => {
+    if (cmd === 'WHOIS' && nick === 'carol') {
+      setImmediate(() => bot.emit('whois', { nick, ident: '~carol', hostname: 'carol.example.net' }))
+    }
   }
   const db = fakeDb()
   const admins = createAdmins(db, config)
@@ -80,13 +82,34 @@ test('owner can add admins by nick or mask, and nobody can remove the owner', as
 
   assert.match(await pm('@adminadd carol', owner), /Added \*!~carol@carol\.example\.net/)
   assert.match(await pm('@adminadd dave!*@*.dave.org', owner), /Added/)
-  assert.match(await pm('@adminadd nobody', owner), /Couldn't find/)
 
   const carol = { nick: 'carol2', ident: '~carol', hostname: 'carol.example.net' }
   assert.match(await pm('@admindel *!~me@home.example.org', carol), /can't be removed/)
   assert.match(await pm('@owner *!*@*', carol), /Only the owner/)
   assert.match(await pm('@admindel dave!*@*.dave.org', carol), /Removed/)
   assert.deepEqual([...db.data.get('admins')], ['*!~carol@carol.example.net'])
+})
+
+test('@adminadd: a WHOIS timeout reports not found and cleans up', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { bot, admins, pm } = setup()
+  await admins.claim(await admins.prepareClaim(), owner)
+  await pm('@adminadd nobody', owner) // no WHOIS reply comes back
+  assert.equal(bot.listenerCount('whois'), 1)
+  t.mock.timers.tick(5000)
+  for (let i = 0; i < 5; i++) await tick()
+  assert.match(bot.sent.at(-1)[2], /Couldn't find/)
+  assert.equal(bot.listenerCount('whois'), 0)
+})
+
+test('claim: a leftover code is discarded once there is an owner', async () => {
+  const { db, admins } = setup()
+  db.data.set('admin:owner', '*!~me@home.example.org')
+  const code = await admins.prepareClaim({ reclaim: true })
+  // restarted without BOT_RECLAIM, code never used
+  assert.equal(await admins.prepareClaim(), null)
+  assert.equal(await admins.claim(code, { ident: 'x', hostname: 'evil' }), null)
+  assert.equal(db.data.get('admin:owner'), '*!~me@home.example.org')
 })
 
 test('strangers are refused, except for @claim', async () => {

@@ -42,8 +42,8 @@ function setup (...plugins) {
   const loaded = plugins.map(p => p({ bot, db, config, admins }))
   createRouter(bot, admins, loaded, { rateLimit: { burst: 1000, interval: 1 } })
   // Sends a message and waits for the bot to settle (no new output for 50ms)
-  const say = async (text, nick = 'bob', target = '#c') => {
-    bot.emit('privmsg', message({ nick, target, message: text }))
+  const say = async (text, nick = 'bob', target = '#c', extra = {}) => {
+    bot.emit('privmsg', message({ nick, target, message: text, ...extra }))
     let count = -1
     while (count !== bot.sent.length) {
       count = bot.sent.length
@@ -71,6 +71,7 @@ test('durations', () => {
 test('memory: helpers', () => {
   assert.equal(normalize('Alice?!'), 'alice')
   assert.equal(fill('Hello $nick, welcome to $channel', { nick: 'bob', channel: '#c' }), 'Hello bob, welcome to #c')
+  assert.equal(fill('in $channel', { nick: 'bob', channel: "#a$&b$'" }), "in #a$&b$'")
 })
 
 redisTest('memory: several phrases, $nick, forget one or all', async () => {
@@ -99,6 +100,7 @@ redisTest('memory: cooldown per channel', async () => {
   bot.sent.length = 0
   await say('tea')
   await say('tea again')
+  await say('tea', 'bob', '#C') // same channel, different case
   await say('tea', 'bob', '#other')
   assert.deepEqual(bot.sent, [['say', '#c', 'Tea!'], ['say', '#other', 'Tea!']])
 })
@@ -163,6 +165,13 @@ redisTest('remind: stored in Redis and delivered when due', async () => {
   assert.equal(await db.zCard('reminders'), 0)
 })
 
+redisTest('remind: limit is per ident@host, not per nick', async () => {
+  const { say } = setup(remind)
+  for (let i = 0; i < 20; i++) await say(`!remind 1h tea ${i}`, `bob${i}`)
+  assert.match(await say('!remind 1h one more', 'bobby'), /already have 20 reminders/)
+  assert.match(await say('!remind 1h mine', 'carol', '#c', { ident: 'carol', hostname: 'carol.example' }), /I'll remind you/)
+})
+
 redisTest('remind: kept while the bot is offline', async () => {
   const { bot, say, plugins } = setup(remind)
   await say('!remind 1m stretch')
@@ -193,8 +202,12 @@ redisTest('flood: warns, kicks, then bans with a timed unban', async () => {
 
   await liftBans(now + 14 * 60_000)
   assert.equal(await db.zCard('unbans'), 1)
-  await liftBans(now + 16 * 60_000)
-  assert.deepEqual(bot.sent.at(-1), ['raw', 'MODE', '#c', '-b', '*!*@evil.example'])
+  bot.sent.length = 0
+
+  // the unban is sent 3 times, 10 minutes apart, in case the bot had lost op
+  for (const minutes of [16, 27, 38]) await liftBans(now + minutes * 60_000)
+  const unbans = bot.sent.filter(s => s[2] === '#c' && s[3] === '-b')
+  assert.equal(unbans.length, 3)
   assert.equal(await db.zCard('unbans'), 0)
 })
 

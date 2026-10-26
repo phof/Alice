@@ -2,7 +2,20 @@ import { matchMask, isValidMask, hostmaskOf } from '../lib/mask.js'
 import { scanKeys } from '../db/redis.js'
 
 export default function ({ bot, db }) {
-  const key = (nick) => `user:${nick.toLowerCase()}`
+  // IRC nicks are case-insensitive, with IRC's own rules: [ ] \ are the uppercase of { } |
+  const key = (nick) => `user:${bot.caseLower(nick)}`
+
+  // Entries used to be stored with the nick as typed; move them to the lowercase key
+  async function migrate () {
+    for (const k of await scanKeys(db, 'user:*')) {
+      const lower = key(k.slice('user:'.length))
+      if (lower === k) continue
+      if (await db.exists(lower)) await db.del(k)
+      else await db.rename(k, lower)
+      console.log(`Auto-op: migrated ${k} to ${lower}`)
+    }
+  }
+  db.on('ready', () => migrate().catch(err => console.error('Auto-op migration failed', err.message)))
 
   bot.on('join', async (e) => {
     if (bot.caseCompare(e.nick, bot.user.nick)) return
@@ -22,6 +35,7 @@ export default function ({ bot, db }) {
 
   return {
     name: 'Auto-op',
+    migrate,
     commands: [{
       command: '@opadd',
       usage: '@opadd <nick> <hostmask>',
