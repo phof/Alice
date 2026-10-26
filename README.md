@@ -4,17 +4,19 @@ A simple Node.js IRC bot.
 
 ## Running
 
-Requires Node.js 24+ and Redis (8 recommended).
+Requires Node.js 24+ and Redis (8 recommended). Dependencies are managed with pnpm; `corepack enable`
+gets the exact pnpm version this project pins.
 
 ```sh
-yarn install
-BOT_SERVER=hostsailor.ircnet.nl BOT_CHANNELS='#mychannel' yarn start
+corepack enable
+pnpm install
+BOT_SERVER=hostsailor.ircnet.nl BOT_CHANNELS='#mychannel' pnpm start
 ```
 
 Then claim the bot, see [Owner and admins](#owner-and-admins). On IRCnet, not every server accepts
 connections from everywhere: see the [list of open servers](https://www.ircnet.info/servers?open=true).
 
-`yarn dev` restarts the bot on file changes, `yarn test` runs the tests and `yarn lint` checks style.
+`pnpm dev` restarts the bot on file changes, `pnpm test` runs the tests and `pnpm lint` checks style.
 Some tests need Redis: they use `TEST_REDIS_URL` (default `redis://127.0.0.1:6379/15`, **flushed** by
 the tests) and are skipped if it isn't reachable.
 

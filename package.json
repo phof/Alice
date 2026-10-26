@@ -20,5 +20,6 @@
     "dev": "node --watch bot.js",
     "lint": "standard",
     "test": "node --test"
-  }
+  },
+  "packageManager": "pnpm@12.15.0"
 }

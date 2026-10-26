@@ -50,7 +50,8 @@ function update_script() {
 
   msg_info "Updating ${APP}"
   $STD git reset --hard '@{u}'
-  $STD yarn install --production --frozen-lockfile
+  export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  $STD pnpm install --prod --frozen-lockfile
   msg_ok "Updated ${APP} to $(git rev-parse --short HEAD)"
 
   msg_info "Starting Service"

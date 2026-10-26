@@ -39,12 +39,14 @@ systemctl enable -q redis-server
 systemctl restart redis-server
 msg_ok "Installed Redis $(redis-server --version | grep -o 'v=[0-9.]*' | cut -d= -f2)"
 
-NODE_VERSION="24" NODE_MODULE="yarn" setup_nodejs
+# Corepack provides the pnpm version pinned in package.json
+NODE_VERSION="24" NODE_MODULE="corepack" setup_nodejs
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 msg_info "Installing Alice"
 $STD git clone --branch "$ALICE_BRANCH" "https://github.com/${ALICE_REPO}.git" /opt/alice
 cd /opt/alice || exit
-$STD yarn install --production --frozen-lockfile
+$STD pnpm install --prod --frozen-lockfile
 useradd --system --no-create-home --shell /usr/sbin/nologin alice
 msg_ok "Installed Alice ($(git rev-parse --short HEAD))"
 
