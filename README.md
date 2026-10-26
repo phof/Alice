@@ -112,8 +112,9 @@ so a join flood can't make the bot flood. The lines are in `plugins/greet.js`.
   after each step, and offences are forgotten after 10 minutes of good behaviour. Admins are exempt.
   Ban expiry is stored in Redis, so bans are still lifted after a restart.
   **Kicks and bans only work if the bot is a channel operator.**
-- **Outgoing**: the bot follows IRCnet's limits for clients: a burst of 4 lines, then one line every
-  2 seconds, so the server never disconnects it for "Excess Flood". Replies wait in a queue, which drops
+- **Outgoing**: the bot follows the standard ircd flood limits for clients
+  ([RFC 1459 §8.10](https://www.rfc-editor.org/rfc/rfc1459#section-8.10)), which IRCnet uses: a burst
+  of 4 lines, then one line every 2 seconds, so the server never disconnects it for "Excess Flood". Replies wait in a queue, which drops
   new lines once 50 are waiting (reminders and `!tell` deliveries are never dropped). Kicks, bans and
   other commands go out immediately.
 

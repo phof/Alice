@@ -1,7 +1,7 @@
 import { matchMask, isValidMask, hostmaskOf } from '../lib/mask.js'
 import { scanKeys } from '../db/redis.js'
 
-export default function ({ bot, db, admins }) {
+export default function ({ bot, db, config, admins }) {
   // IRC nicks are case-insensitive, with IRC's own rules: [ ] \ are the uppercase of { } |
   const key = (nick) => `user:${bot.caseLower(nick)}`
 
@@ -62,13 +62,20 @@ export default function ({ bot, db, admins }) {
       }
     }, {
       command: '@oplist',
-      helptext: 'Lists the auto-op list (the owner and admins are always opped, see @adminlist)',
+      helptext: 'Lists everyone opped on join: the owner, admins and the auto-op list',
       handler: async ({ reply }) => {
+        const owner = await admins.owner()
+        const adminMasks = [...config.admins, ...await admins.admins()]
         const keys = await scanKeys(db, 'user:*')
-        if (!keys.length) return reply('The auto-op list is empty. The owner and admins are opped anyway, see @adminlist')
-        const masks = await db.mGet(keys)
-        const entries = keys.map((k, i) => `${k.slice('user:'.length)} (${masks[i]})`)
-        reply(`Auto-op: ${entries.join(', ')}`)
+        const masks = keys.length ? await db.mGet(keys) : []
+        const autoOp = keys.map((k, i) => `${k.slice('user:'.length)} (${masks[i]})`)
+
+        const parts = [
+          owner && `owner ${owner}`,
+          adminMasks.length && `admins ${adminMasks.join(', ')}`,
+          autoOp.length && `auto-op ${autoOp.join(', ')}`
+        ].filter(Boolean)
+        reply(parts.length ? `Opped on join: ${parts.join(' · ')}` : 'Nobody is opped on join yet')
       }
     }]
   }

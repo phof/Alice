@@ -58,14 +58,31 @@ test('auto-op: the owner and admins are always opped', async () => {
   assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'boss']])
 })
 
-test('auto-op: @oplist shows nicks and masks', async () => {
+test('auto-op: @oplist shows everyone opped on join', async () => {
   const { db, say, bot } = setup(autoOp)
   db.mGet = async (keys) => keys.map(k => db.data.get(k) ?? null)
+  // only BOT_ADMINS (*!*@trusted) so far
   await say('Alice', '@oplist', { hostname: 'trusted' })
-  assert.match(bot.sent.at(-1)[2], /^The auto-op list is empty/)
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: admins *!*@trusted')
+
   await say('Alice', '@opadd Bob bob!~bob@*.example.com', { hostname: 'trusted' })
   await say('Alice', '@oplist', { hostname: 'trusted' })
-  assert.equal(bot.sent.at(-1)[2], 'Auto-op: bob (bob!~bob@*.example.com)')
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: admins *!*@trusted · auto-op bob (bob!~bob@*.example.com)')
+})
+
+test('auto-op: @oplist includes the owner and admins from Redis', async () => {
+  const bot = fakeBot()
+  const db = fakeDb()
+  db.mGet = async (keys) => keys.map(k => db.data.get(k) ?? null)
+  const admins = {
+    isAdmin: async () => true,
+    owner: async () => '*!~me@home',
+    admins: async () => ['*!~carol@carol.net']
+  }
+  createRouter(bot, admins, [autoOp({ bot, db, config: { admins: [] }, admins })])
+  bot.emit('privmsg', message({ target: 'Alice', message: '@oplist' }))
+  for (let i = 0; i < 5; i++) await tick()
+  assert.equal(bot.sent.at(-1)[2], 'Opped on join: owner *!~me@home · admins *!~carol@carol.net')
 })
 
 test('auto-op: migrates mixed-case entries to IRC-lowercase keys', async () => {
