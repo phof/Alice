@@ -1,4 +1,4 @@
-export default function ({ bot }) {
+export default function ({ bot, db, config, admins, shutdown }) {
   const channelArg = (handler, usage) => (ctx) => {
     const channel = ctx.argv[0]
     if (!channel || !bot.network.isChannelName(channel)) return ctx.reply(`Usage: ${usage}`)
@@ -55,6 +55,30 @@ export default function ({ bot }) {
         console.log(`${nick} requested bot to change nick to ${newNick}`)
         reply(`Changing nick to ${newNick}`)
         bot.changeNick(newNick)
+      }
+    }, {
+      command: '@flushdb',
+      usage: '@flushdb confirm',
+      helptext: 'Owner only: deletes ALL bot data (admins, auto-ops, memories, reminders, seen...), keeping only the owner',
+      handler: async ({ nick, argv: [confirm], event, reply }) => {
+        if (!await admins.isOwner(event)) return reply('Only the owner can flush the database.')
+        if (confirm !== 'confirm') {
+          return reply('This deletes ALL bot data: admins, auto-ops, memories, reminders, tells, seen and greetings. The owner is kept. Send "@flushdb confirm" to go ahead.')
+        }
+        console.log(`${nick} flushed the Redis database`)
+        // keep the owner, or nobody could manage the bot until it's restarted
+        const owner = await admins.owner()
+        await db.flushDb()
+        if (owner) await admins.setOwner(owner)
+        reply('Flushed the database. You are still the owner.')
+      }
+    }, {
+      command: '@disconnect',
+      helptext: 'Disconnects the bot and stops it; under systemd, start it again with: systemctl start alice',
+      handler: ({ nick }) => {
+        console.log(`${nick} requested bot to disconnect`)
+        bot.sayNow(nick, 'Disconnecting. Start me again with: systemctl start alice')
+        return shutdown(0, config.quitMessage)
       }
     }]
   }

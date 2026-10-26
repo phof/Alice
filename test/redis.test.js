@@ -13,6 +13,7 @@ import seen from '../plugins/seen.js'
 import tell from '../plugins/tell.js'
 import remind from '../plugins/remind.js'
 import flood from '../plugins/flood.js'
+import simpleAdmin from '../plugins/simple_admin.js'
 import greet, { greetings, welcomeBacks, fill as fillGreeting } from '../plugins/greet.js'
 import { fakeBot, message } from './helpers.js'
 
@@ -32,6 +33,7 @@ after(async () => { if (db.isOpen) await db.close(); else db.destroy() })
 
 const config = {
   admins: ['*!*@trusted'],
+  quitMessage: "We're all mad here.",
   memoryCooldown: 2,
   flood: { enabled: true, lines: 8, seconds: 6, repeats: 4, banMinutes: 15 },
   greet: { enabled: true, afterDays: 3 }
@@ -305,4 +307,42 @@ redisTest('greet: GREET=false records but stays quiet', async () => {
   await quiet.onJoin(joiner('gina'))
   assert.deepEqual(bot.sent, [])
   assert.ok(await db.exists('greet:#c:gina'))
+})
+
+function adminSetup () {
+  const bot = fakeBot()
+  bot.sayNow = bot.say
+  const admins = createAdmins(db, { admins: ['*!*@trusted'] })
+  const shutdowns = []
+  const shutdown = async (...args) => { shutdowns.push(args) }
+  createRouter(bot, admins, [simpleAdmin({ bot, db, config, admins, shutdown })], { rateLimit: { burst: 1000, interval: 1 } })
+  const pm = async (text, from) => {
+    bot.emit('privmsg', message({ target: 'Alice', message: text, ...from }))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    return bot.sent.at(-1)?.[2]
+  }
+  return { bot, pm, shutdowns }
+}
+const theOwner = { nick: 'me', ident: '~me', hostname: 'home.example.org' }
+const anAdmin = { nick: 'adm', ident: '~a', hostname: 'trusted' }
+
+redisTest('@flushdb: owner only, needs confirm, keeps the owner', async () => {
+  const { pm } = adminSetup()
+  await db.set('admin:owner', '*!~me@home.example.org')
+  await db.sAdd('memory:tea', 'Tea!')
+  await db.sAdd('admins', '*!*@friend')
+
+  assert.match(await pm('@flushdb confirm', anAdmin), /Only the owner/)
+  assert.match(await pm('@flushdb', theOwner), /Send "@flushdb confirm"/)
+  assert.equal(await db.exists('memory:tea'), 1)
+
+  assert.match(await pm('@flushdb confirm', theOwner), /still the owner/)
+  assert.deepEqual((await db.keys('*')).sort(), ['admin:owner'])
+  assert.equal(await db.get('admin:owner'), '*!~me@home.example.org')
+})
+
+redisTest('@disconnect: stops the bot with exit code 0 and the quit message', async () => {
+  const { pm, shutdowns } = adminSetup()
+  assert.match(await pm('@disconnect', anAdmin), /systemctl start alice/)
+  assert.deepEqual(shutdowns, [[0, config.quitMessage]])
 })

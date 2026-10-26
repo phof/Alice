@@ -48,7 +48,7 @@ const plugins = [
   tell,
   remind,
   greet
-].map(plugin => plugin({ bot, db, config, admins }))
+].map(plugin => plugin({ bot, db, config, admins, shutdown }))
 
 createRouter(bot, admins, plugins, { rateLimit: config.rateLimit })
 console.log('Plugins loaded', plugins.map(p => p.name).join(', '))
@@ -90,12 +90,14 @@ bot.connect({
   auto_reconnect_max_retries: 30
 })
 
+// Exit code 0 means "stopped on purpose" (SIGTERM, @disconnect): systemd leaves it stopped.
+// Anything else is a failure, and systemd restarts the bot
 let stopping = false
-async function shutdown (code = 0) {
+async function shutdown (code = 0, quitMessage = 'Cycling..') {
   if (stopping) return
   stopping = true
   if (bot.connected) {
-    bot.quit('Cycling..')
+    bot.quit(quitMessage)
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
   await db.close().catch(() => {})

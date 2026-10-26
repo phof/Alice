@@ -131,8 +131,12 @@ Public:
 | `!memory [word]` | Lists known words, or the numbered phrases for `[word]` |
 | `!forget <word> [number]` | Forgets a word, or just one of its phrases |
 
-Admin, by private message: `@join`, `@part`, `@op`, `@say`, `@nick`, `@opadd <nick> <hostmask>`,
-`@opremove <nick>`, `@oplist`, `@adminadd`, `@admindel`, `@adminlist`, `@owner`.
+Admin, by private message: `@join`, `@part`, `@op`, `@say`, `@nick`, `@disconnect`, `@opadd <nick> <hostmask>`,
+`@opremove <nick>`, `@oplist`, `@adminadd`, `@admindel`, `@adminlist`, `@owner`, and for the owner only
+`@flushdb confirm`, which deletes all bot data except the owner.
+
+`@disconnect` stops the bot. In the LXC it stays stopped until `systemctl start alice` or a reboot;
+crashes and connection failures are still restarted automatically.
 
 Time and weather data come from [Open-Meteo](https://open-meteo.com/), no API key needed.
 

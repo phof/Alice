@@ -105,7 +105,8 @@ Group=alice
 WorkingDirectory=/opt/alice
 EnvironmentFile=/etc/alice/alice.env
 ExecStart=/usr/bin/node bot.js
-Restart=always
+# Restart after crashes and connection failures, but not after @disconnect or systemctl stop
+Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
 
