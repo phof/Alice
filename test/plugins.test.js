@@ -49,6 +49,25 @@ test('auto-op: ops matching hostmasks only', async () => {
   assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'Bob']])
 })
 
+test('auto-op: the owner and admins are always opped', async () => {
+  const { bot } = setup(autoOp)
+  bot.emit('join', message({ channel: '#c', nick: 'boss', hostname: 'trusted' }))
+  bot.emit('join', message({ channel: '#c', nick: 'rando', hostname: 'elsewhere' }))
+  await tick()
+  await tick()
+  assert.deepEqual(bot.sent.filter(s => s[0] === 'raw'), [['raw', 'MODE', '#c', '+o', 'boss']])
+})
+
+test('auto-op: @oplist shows nicks and masks', async () => {
+  const { db, say, bot } = setup(autoOp)
+  db.mGet = async (keys) => keys.map(k => db.data.get(k) ?? null)
+  await say('Alice', '@oplist', { hostname: 'trusted' })
+  assert.match(bot.sent.at(-1)[2], /^The auto-op list is empty/)
+  await say('Alice', '@opadd Bob bob!~bob@*.example.com', { hostname: 'trusted' })
+  await say('Alice', '@oplist', { hostname: 'trusted' })
+  assert.equal(bot.sent.at(-1)[2], 'Auto-op: bob (bob!~bob@*.example.com)')
+})
+
 test('auto-op: migrates mixed-case entries to IRC-lowercase keys', async () => {
   const { db } = setup(autoOp)
   const plugin = autoOp({ bot: fakeBot(), db, config })

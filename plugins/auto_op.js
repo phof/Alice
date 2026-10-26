@@ -1,7 +1,7 @@
 import { matchMask, isValidMask, hostmaskOf } from '../lib/mask.js'
 import { scanKeys } from '../db/redis.js'
 
-export default function ({ bot, db }) {
+export default function ({ bot, db, admins }) {
   // IRC nicks are case-insensitive, with IRC's own rules: [ ] \ are the uppercase of { } |
   const key = (nick) => `user:${bot.caseLower(nick)}`
 
@@ -17,9 +17,15 @@ export default function ({ bot, db }) {
   }
   db.on('ready', () => migrate().catch(err => console.error('Auto-op migration failed', err.message)))
 
+  // The owner and admins are always opped; others only if they're on the auto-op list
   bot.on('join', async (e) => {
     if (bot.caseCompare(e.nick, bot.user.nick)) return
     try {
+      if (await admins.isAdmin(e)) {
+        console.log(`${e.nick} is an admin, OPing the user`)
+        bot.raw('MODE', e.channel, '+o', e.nick)
+        return
+      }
       const mask = await db.get(key(e.nick))
       if (!mask) return
       if (matchMask(mask, hostmaskOf(e))) {
@@ -52,14 +58,17 @@ export default function ({ bot, db }) {
       handler: async ({ argv: [nick], reply }) => {
         if (!nick) return reply('Usage: @opremove <nick>')
         const removed = await db.del(key(nick))
-        reply(removed ? `${nick} has been removed from the auto-op list` : `${nick} is not known`)
+        reply(removed ? `${nick} has been removed from the auto-op list` : `${nick} isn't on the auto-op list`)
       }
     }, {
       command: '@oplist',
-      helptext: 'Lists known users',
+      helptext: 'Lists the auto-op list (the owner and admins are always opped, see @adminlist)',
       handler: async ({ reply }) => {
-        const nicks = (await scanKeys(db, 'user:*')).map(k => k.slice('user:'.length))
-        reply(nicks.length ? `Known users: ${nicks.join(', ')}` : 'There are no known users')
+        const keys = await scanKeys(db, 'user:*')
+        if (!keys.length) return reply('The auto-op list is empty. The owner and admins are opped anyway, see @adminlist')
+        const masks = await db.mGet(keys)
+        const entries = keys.map((k, i) => `${k.slice('user:'.length)} (${masks[i]})`)
+        reply(`Auto-op: ${entries.join(', ')}`)
       }
     }]
   }

@@ -59,6 +59,7 @@ ask() {
   echo "${answer:-$default}"
 }
 if [[ -t 0 ]]; then
+  echo -e "\n${TAB3}${YW}Bot settings: type a value, or press Enter to keep the default in [brackets].${CL}"
   echo -e "${TAB3}IRCnet servers open to everyone: https://www.ircnet.info/servers?open=true"
 fi
 BOT_SERVER="$(ask "IRC server" "hostsailor.ircnet.nl")"
