@@ -7,13 +7,13 @@
   "main": "bot.js",
   "dependencies": {
     "irc-framework": "^4.14.0",
-    "redis": "^5.12.1"
+    "redis": "^6.3.0"
   },
   "devDependencies": {
     "standard": "^17.1.2"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "start": "node bot.js",

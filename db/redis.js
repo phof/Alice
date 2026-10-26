@@ -1,8 +1,13 @@
 import { createClient } from 'redis'
 
 export function connectRedis (url) {
-  // Fail fast instead of queueing commands while Redis is unreachable
-  const db = createClient({ url, disableOfflineQueue: true })
+  const db = createClient({
+    url,
+    // Fail fast instead of queueing commands while Redis is unreachable
+    disableOfflineQueue: true,
+    // Redis Enterprise maintenance events, not relevant for a local Redis
+    maintNotifications: 'disabled'
+  })
   db.on('error', (err) => console.error('Redis error', err.message))
   db.connect().catch(err => console.error('Redis connection failed', err.message))
   return db

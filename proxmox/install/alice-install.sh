@@ -14,16 +14,30 @@ ALICE_REPO="${ALICE_REPO:-phof/Alice}"
 ALICE_BRANCH="${ALICE_BRANCH:-master}"
 
 msg_info "Installing Dependencies"
-$STD apt install -y git redis-server
+$STD apt install -y git apt-transport-https
 msg_ok "Installed Dependencies"
 
-msg_info "Configuring Redis"
-# Local only (Debian's default bind), with an append-only file so reminders,
+# Redis 8 from the official Redis repository, rather than whatever Debian ships
+msg_info "Setting up Redis Repository"
+setup_deb822_repo \
+  "redis" \
+  "https://packages.redis.io/gpg" \
+  "https://packages.redis.io/deb" \
+  "trixie"
+msg_ok "Setup Redis Repository"
+
+msg_info "Installing Redis"
+$STD apt install -y redis
+# Local only (the default bind), with an append-only file so reminders,
 # memories and admins survive crashes and restarts
-sed -i 's/^appendonly no/appendonly yes/' /etc/redis/redis.conf
+if grep -q '^appendonly ' /etc/redis/redis.conf; then
+  sed -i 's/^appendonly .*/appendonly yes/' /etc/redis/redis.conf
+else
+  echo 'appendonly yes' >>/etc/redis/redis.conf
+fi
 systemctl enable -q redis-server
 systemctl restart redis-server
-msg_ok "Configured Redis"
+msg_ok "Installed Redis $(redis-server --version | grep -o 'v=[0-9.]*' | cut -d= -f2)"
 
 NODE_VERSION="24" NODE_MODULE="yarn" setup_nodejs
 

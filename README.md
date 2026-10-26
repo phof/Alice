@@ -4,7 +4,7 @@ A simple Node.js IRC bot.
 
 ## Running
 
-Requires Node.js 22+ and Redis.
+Requires Node.js 24+ and Redis (8 recommended).
 
 ```sh
 yarn install
@@ -28,7 +28,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/phof/Alice/master/proxmo
 ```
 
 It creates an unprivileged Debian 13 container (1 CPU, 512 MB RAM, 4 GB disk) with Node.js 24 and a
-local Redis, asks for the server (default `hostsailor.ircnet.nl`, see the
+local Redis 8 (from the official Redis repository), asks for the server (default `hostsailor.ircnet.nl`, see the
 [open IRCnet servers](https://www.ircnet.info/servers?open=true)), nick and channels, and starts the bot as a systemd service. At the
 end it shows the `@claim` code. To install from another branch or fork, set `ALICE_BRANCH` and/or
 `ALICE_REPO` before the command, e.g. `ALICE_BRANCH=my-branch bash -c "$(curl ...)"` (the URL must
