@@ -1,123 +1,60 @@
-'use strict'
+import { pick } from '../lib/commands.js'
+import { scanKeys } from '../db/redis.js'
 
-const async = require('async')
+const okay = ['Okay,', 'Cool,', 'Alright,', 'Yep,', 'Sure,', 'Done,', 'Roger,', 'Fine,', 'Yes,']
 
-module.exports = (bot, rdb) => {
-  const re = [
-    /(!remember) (.+?) (.+$)/i,
-    /(!forget) (.+$)/i,
-    /!memory/i
-  ]
-  const okay = [
-    'Okay,',
-    'Cool,',
-    'Alright,',
-    'Yep,',
-    'Sure,',
-    'Done,',
-    'Roger,',
-    'Fine,',
-    'Yes,'
-  ]
+// "Alice?" and "alice," should both trigger "alice"
+export const normalize = (word) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
 
-  bot.on('message#', (nick, to, text) => {
-    const redisError = (err) => {
-      console.error('Error while trying to connect to Redis DB', err)
-      bot.say(to, 'Ugh, error while trying to connect to Redis DB')
+export default function ({ bot, db }) {
+  /*
+    Reply with a remembered phrase whenever someone mentions a known word
+  */
+  bot.on('privmsg', async (e) => {
+    if (!bot.network.isChannelName(e.target) || e.message.startsWith('!')) return
+
+    const words = [...new Set(e.message.split(/\s+/).map(normalize).filter(Boolean))]
+    if (words.length === 0) return
+
+    try {
+      const replies = (await db.mGet(words.map(w => `memory:${w}`))).filter(Boolean)
+      // if a message mentions several known words, take a random one
+      if (replies.length > 0) bot.say(e.target, pick(replies))
+    } catch (err) {
+      console.error('Memory lookup failed', err.message) // not replying here to avoid channel spam
     }
-
-    /*
-      Remember
-    */
-    let matchRemember = text.match(re[0])
-    if (matchRemember) {
-      let word = matchRemember[2].toLowerCase()
-      let phrase = matchRemember[3]
-
-      rdb.set('memory:' + word, phrase, (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else {
-          bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will remember ' + word)
-        }
-      })
-      return
-    }
-
-    /*
-      Forget
-    */
-    let matchForget = text.match(re[1])
-    if (matchForget) {
-      let word = matchForget[2].toLowerCase()
-
-      rdb.get('memory:' + word, (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else if (reply) {
-          rdb.del('memory:' + word, (err, reply) => {
-            if (err) {
-              redisError(err)
-            } else {
-              bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will forget ' + word)
-            }
-          })
-        } else {
-          bot.say(to, `${word} is not known`)
-        }
-      })
-      return
-    }
-
-    /*
-      Memory
-    */
-    let matchMemory = text.match(re[2])
-    if (matchMemory) {
-      rdb.keys('memory:*', (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else if (reply.length > 0) {
-          bot.say(to, 'Known words: ' + reply.join(', ').replace(/memory:/g, ''))
-        } else {
-          bot.say(to, 'There are no known words')
-        }
-      })
-      return
-    }
-
-    /*
-      Search Redis everytime someone says something
-    */
-    let words = text.split(' ')
-    let responses = []
-    async.each(words, (word, callback) => {
-      rdb.get('memory:' + word.toLowerCase(), (err, reply) => {
-        if (err) console.error('Error while tryivng to connect to Redis DB', err) // not using redisError here to avoid channel spam
-        if (reply) responses.push(reply) // reply is null when the key is missing
-        callback()
-      })
-    }, function (err) {
-      if (err) {
-        console.error('Error looping through words?!', err)
-      } else {
-        let randResponse = responses[Math.floor(Math.random() * responses.length)] // if a phrase matches multiple words, take a random one
-        bot.say(to, randResponse)
-      }
-    })
   })
 
   return {
     name: 'Memory',
-    actions: [{
-      command: '!remember <word> <phrase>',
-      helptext: 'Public mentions of <word> will trigger a reply with <phrase>'
+    commands: [{
+      command: '!remember',
+      usage: '!remember <word> <phrase>',
+      helptext: 'Public mentions of <word> will trigger a reply with <phrase>',
+      handler: async ({ argv, args, reply }) => {
+        const word = normalize(argv[0] ?? '')
+        const phrase = args.slice(argv[0]?.length ?? 0).trim()
+        if (!word || !phrase) return reply('Usage: !remember <word> <phrase>')
+        await db.set(`memory:${word}`, phrase)
+        reply(`${pick(okay)} will remember ${word}`)
+      }
     }, {
-      command: '!forget <word>',
-      helptext: 'Forgets <word>'
+      command: '!forget',
+      usage: '!forget <word>',
+      helptext: 'Forgets <word>',
+      handler: async ({ argv, reply }) => {
+        const word = normalize(argv[0] ?? '')
+        if (!word) return reply('Usage: !forget <word>')
+        const removed = await db.del(`memory:${word}`)
+        reply(removed ? `${pick(okay)} will forget ${word}` : `${word} is not known`)
+      }
     }, {
-      command: '!memory <message>',
-      helptext: 'Lists known words'
+      command: '!memory',
+      helptext: 'Lists known words',
+      handler: async ({ reply }) => {
+        const words = (await scanKeys(db, 'memory:*')).map(k => k.slice('memory:'.length))
+        reply(words.length ? `Known words: ${words.join(', ')}` : 'There are no known words')
+      }
     }]
   }
 }

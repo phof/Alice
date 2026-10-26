@@ -1,82 +1,81 @@
-'use strict'
+import { readFileSync } from 'node:fs'
+import { Client } from 'irc-framework'
+import config from './lib/config.js'
+import { createRouter } from './lib/commands.js'
+import { throttle } from './lib/throttle.js'
+import { connectRedis } from './db/redis.js'
 
-const irc = require('irc')
-const _ = require('lodash')
+import logs from './plugins/logs.js'
+import simpleAdmin from './plugins/simple_admin.js'
+import keepOp from './plugins/keep_op.js'
+import autoOp from './plugins/auto_op.js'
+import alice from './plugins/alice.js'
+import time from './plugins/time.js'
+import weather from './plugins/weather.js'
+import memory from './plugins/memory.js'
 
-const bot = new irc.Client(
-  process.env.BOT_SERVER || 'localhost',
-  process.env.BOT_NICK || 'Alice',
-  {
-    port: process.env.BOT_PORT || 6667,
-    channels: (process.env.BOT_CHANNELS || '#wonderland').split(','),
-    userName: process.env.BOT_USERNAME || 'alice',
-    realName: process.env.BOT_REALNAME || 'What is a Caucus-race?',
-    autoRejoin: true,
-    floodProtection: true,
-    floodProtectionDelay: 300,
-    retryDelay: 5000,
-    millisecondsOfSilenceBeforePingSent: 30 * 1000,
-    millisecondsBeforePingTimeout: 10 * 1000
-  }
-)
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)))
 
-const rdb = require('./db/redis.js')
+const bot = new Client()
+const db = connectRedis(config.redisUrl)
+throttle(bot)
+
 const plugins = [
   // Logs
-  require('./plugins/logs.js')(bot),
+  logs,
 
   // Private commands
-  require('./plugins/simple_admin.js')(bot),
-  require('./plugins/keep_op.js')(bot),
-  require('./plugins/auto_op.js')(bot, rdb),
+  simpleAdmin,
+  keepOp,
+  autoOp,
 
   // Public commands
-  require('./plugins/alice.js')(bot),
-  require('./plugins/time.js')(bot),
-  require('./plugins/weather.js')(bot),
-  require('./plugins/memory.js')(bot, rdb)
-]
+  alice,
+  time,
+  weather,
+  memory
+].map(plugin => plugin({ bot, db, config }))
 
-console.log('Plugins loaded', _.size(plugins))
+createRouter(bot, config, plugins)
+console.log('Plugins loaded', plugins.map(p => p.name).join(', '))
 
-bot.on('registered', message => {
-  console.log('Connected')
+if (config.admins.length === 0 && config.adminAccounts.length === 0) {
+  console.warn('No BOT_ADMINS or BOT_ADMIN_ACCOUNTS set: @admin commands are disabled')
+}
+
+bot.on('registered', () => {
+  console.log(`Connected to ${config.irc.host} as ${bot.user.nick}`)
+  config.channels.forEach(channel => bot.join(channel))
 })
 
-/*
-  Help
-*/
-bot.on('message#', (nick, to, text) => {
-  if (text.match(/!help/i)) {
-    var helpTopics = _.flatMap(plugins, 'actions')
-    for (let topic of helpTopics) {
-      if (/!/i.test(topic.command)) bot.say(to, `${topic.command} : ${topic.helptext}`)
-    }
+bot.on('reconnecting', (e) => console.log(`Reconnecting (attempt ${e.attempt}/${e.max_retries})..`))
+bot.on('sasl failed', (e) => console.error('SASL authentication failed', e.reason))
+bot.on('irc error', (e) => console.error('IRC error', e.error, e.reason ?? ''))
+
+// irc-framework gave up reconnecting: exit and let the process manager restart us
+bot.on('close', () => {
+  console.error('Connection closed')
+  shutdown(1)
+})
+
+bot.connect({
+  ...config.irc,
+  version: `Alice ${version}`,
+  auto_reconnect: true,
+  auto_reconnect_max_retries: 30
+})
+
+let stopping = false
+async function shutdown (code = 0) {
+  if (stopping) return
+  stopping = true
+  if (bot.connected) {
+    bot.quit('Cycling..')
+    await new Promise(resolve => setTimeout(resolve, 1000))
   }
-})
+  await db.close().catch(() => {})
+  process.exit(code)
+}
 
-bot.on('pm', (nick, text) => {
-  if (text.match(/@help/i)) {
-    var helpTopics = _.flatMap(plugins, 'actions')
-    for (let topic of helpTopics) {
-      if (/@/i.test(topic.command)) bot.say(nick, `${topic.command} : ${topic.helptext}`)
-    }
-  }
-})
-
-/*
-  Listen for other errors
-*/
-bot.on('error', (err) => {
-  console.error('Bot error', err)
-})
-
-rdb.on('error', (err) => {
-  console.error('Redis error', err)
-})
-
-process.on('SIGTERM', () => {
-  bot.disconnect('Cycling..', () => {
-    process.exit(0)
-  })
-})
+process.on('SIGTERM', () => shutdown())
+process.on('SIGINT', () => shutdown())

@@ -1,32 +1,22 @@
-'use strict'
-
-module.exports = function (bot, rdb) {
-  const re = [
-    /@flushdb/i,
-    /@disconnect/i
-  ]
-
-  bot.on('pm', (nick, text) => {
-    if (text.match(re[0])) {
-      bot.say(nick, 'Flushing Redis DB')
-      rdb.flushdb()
-    }
-
-    if (text.match(re[0])) {
-      console.log(`${nick} requested bot to disconnect`)
-      bot.say(nick, 'Disconnecting')
-      bot.disconnect(process.env.DEFAULT_DISCONNECT || "We're all mad here.")
-    }
-  })
-
+export default function ({ bot, db, config }) {
   return {
     name: 'Advanced admin',
-    actions: [{
+    commands: [{
       command: '@flushdb',
-      helptext: 'Flushes Redis DB'
+      helptext: 'Flushes Redis DB (deletes ALL keys, including memory and auto-op)',
+      handler: async ({ nick, reply }) => {
+        console.log(`${nick} requested a Redis flush`)
+        await db.flushDb()
+        reply('Flushed Redis DB')
+      }
     }, {
       command: '@disconnect',
-      helptext: 'Disconnects the bot from the network'
+      helptext: 'Disconnects the bot from the network',
+      handler: ({ nick, reply }) => {
+        console.log(`${nick} requested bot to disconnect`)
+        reply('Disconnecting')
+        bot.quit(config.quitMessage)
+      }
     }]
   }
 }
