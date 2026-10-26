@@ -51,15 +51,20 @@ const plugins = [
 createRouter(bot, admins, plugins, { rateLimit: config.rateLimit })
 console.log('Plugins loaded', plugins.map(p => p.name).join(', '))
 
-// Once Redis is up, print a claim code if the bot has no owner yet
-db.once('ready', async () => {
-  try {
-    const code = await admins.prepareClaim({ reclaim: config.reclaim })
-    if (code) console.log(`CLAIM | To become the bot owner, message it: /msg ${config.irc.nick} @claim ${code}`)
-  } catch (err) {
-    console.error('Could not check the bot owner', err.message)
-  }
-})
+// Wait for Redis (briefly) and print a claim code if the bot has no owner yet.
+// Done before connecting to IRC, so the code shows up even if IRC is unreachable
+if (!db.isReady) {
+  await Promise.race([
+    new Promise(resolve => db.once('ready', resolve)),
+    new Promise(resolve => setTimeout(resolve, 10_000))
+  ])
+}
+try {
+  const code = await admins.prepareClaim({ reclaim: config.reclaim })
+  if (code) console.log(`CLAIM | To become the bot owner, message it: /msg ${config.irc.nick} @claim ${code}`)
+} catch (err) {
+  console.error('Could not check the bot owner, @claim is unavailable until restart:', err.message)
+}
 
 bot.on('registered', () => {
   console.log(`Connected to ${config.irc.host} as ${bot.user.nick}`)
@@ -70,7 +75,7 @@ bot.on('reconnecting', (e) => console.log(`Reconnecting (attempt ${e.attempt}/${
 bot.on('sasl failed', (e) => console.error('SASL authentication failed', e.reason))
 bot.on('irc error', (e) => console.error('IRC error', e.error, e.reason ?? ''))
 
-// irc-framework gave up reconnecting: exit and let the process manager restart us
+// irc-framework gave up (or never connected): exit and let systemd restart us
 bot.on('close', () => {
   console.error('Connection closed')
   shutdown(1)

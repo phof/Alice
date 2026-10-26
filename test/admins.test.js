@@ -12,6 +12,7 @@ function fakeDb () {
     data,
     get: async (k) => data.get(k) ?? null,
     set: async (k, v) => { data.set(k, v) },
+    del: async (k) => Number(data.delete(k)),
     sMembers: async (k) => [...set(k)],
     sAdd: async (k, v) => { const s = set(k); const had = s.has(v); s.add(v); return had ? 0 : 1 },
     sRem: async (k, v) => Number(set(k).delete(v))
@@ -50,6 +51,14 @@ test('claim: one-time code makes the claimer owner', async () => {
   // the code is spent
   assert.match(await pm(`@claim ${code}`, stranger), /not valid/)
   assert.equal(db.data.get('admin:owner'), '*!~me@home.example.org')
+})
+
+test('claim: the same code survives restarts until used', async () => {
+  const { db, admins } = setup()
+  const code = await admins.prepareClaim()
+  const restarted = createAdmins(db, { admins: [] })
+  assert.equal(await restarted.prepareClaim(), code)
+  assert.notEqual(await restarted.prepareClaim({ reclaim: true }), code)
 })
 
 test('claim: no code once there is an owner, unless reclaiming', async () => {

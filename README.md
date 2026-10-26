@@ -17,6 +17,28 @@ Then claim the bot, see [Owner and admins](#owner-and-admins).
 Some tests need Redis: they use `TEST_REDIS_URL` (default `redis://127.0.0.1:6379/15`, **flushed** by
 the tests) and are skipped if it isn't reachable.
 
+## Proxmox LXC
+
+`proxmox/` holds a [community-scripts.org](https://community-scripts.org/) style installer. On the
+Proxmox host, run:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/phof/Alice/master/proxmox/ct/alice.sh)"
+```
+
+It creates an unprivileged Debian 13 container (1 CPU, 512 MB RAM, 4 GB disk) with Node.js 24 and a
+local Redis, asks for the server, nick and channels, and starts the bot as a systemd service. At the
+end it shows the `@claim` code. To install from another branch or fork, set `ALICE_BRANCH` and/or
+`ALICE_REPO` before the command, e.g. `ALICE_BRANCH=my-branch bash -c "$(curl ...)"` (the URL must
+point at the same branch).
+
+In the container:
+
+- Settings: `/etc/alice/alice.env`, then `systemctl restart alice`
+- Logs: `journalctl -u alice -f`
+- Update: run `update`
+- Code is in `/opt/alice`; Redis data in `/var/lib/redis` (append-only file enabled)
+
 ## Configuration
 
 All settings come from environment variables.
