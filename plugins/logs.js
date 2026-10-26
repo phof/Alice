@@ -1,38 +1,23 @@
-'use strict'
-
-module.exports = function (bot) {
-  bot.on('pm', (nick, text) => {
-    console.log(`PM | Private message from ${nick}`)
+export default function ({ bot }) {
+  bot.on('privmsg', (e) => {
+    if (bot.network.isChannelName(e.target)) {
+      console.log(`MESSAGE | Message on ${e.target} from ${e.nick}`)
+    } else {
+      console.log(`PM | Private message from ${e.nick}`)
+    }
   })
 
-  bot.on('message#', (nick, to, text) => {
-    let channel = to
-    console.log(`MESSAGE | Message on ${channel} from ${nick}`)
+  bot.on('join', (e) => console.log(`JOIN | ${e.nick} joined ${e.channel}`))
+  bot.on('part', (e) => console.log(`PART | ${e.nick} left ${e.channel}`))
+  bot.on('kick', (e) => console.log(`KICK | ${e.kicked} was kicked from ${e.channel} by ${e.nick}`))
+  bot.on('quit', (e) => console.log(`QUIT | ${e.nick} quit (${e.message})`))
+
+  bot.on('userlist', (e) => {
+    const nicks = e.users.map(u => (u.modes.includes('o') ? '@' : '') + u.nick)
+    console.log(`NAMES | ${e.channel} members: ${nicks.join(' ')}`)
   })
 
-  bot.on('join', (channel, nick, message) => {
-    console.log(`JOIN | ${nick} joined ${channel}`)
-  })
+  bot.on('ctcp request', (e) => console.log(`CTCP | ${e.type} from ${e.nick}`))
 
-  bot.on('part', (channel, nick, reason, message) => {
-    console.log(`PART | ${nick} left ${channel}`)
-  })
-
-  bot.on('quit', (nick, reason, channels, message) => {
-    console.log(`QUIT | ${nick} left ${channels}`)
-  })
-
-  bot.on('names', (channel, nicks) => {
-    nicks = JSON.stringify(nicks)
-    console.log(`NAMES | ${channel} members: ${nicks}`)
-  })
-
-  bot.on('ctcp-version', (from, to, message) => {
-    console.log(`VERSION | CTCP VERSION from ${message.prefix}`)
-  })
-
-  return {
-    name: 'Simple log',
-    actions: []
-  }
+  return { name: 'Simple log' }
 }

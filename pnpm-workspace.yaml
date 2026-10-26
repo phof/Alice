@@ -1,0 +1,4 @@
+# Dependency install scripts pnpm may run. core-js (used by irc-framework)
+# only prints a donation banner in its postinstall, so it stays off.
+allowBuilds:
+  core-js: false

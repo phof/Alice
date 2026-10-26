@@ -1,93 +1,85 @@
-'use strict'
-
-module.exports = function (bot) {
-  bot.on('pm', function (nick, text) {
-    const re = [
-      /(@join) ([#&][^\x07\x2C\s]{0,200})/i,
-      /(@part) ([#&][^\x07\x2C\s]{0,200})/i,
-      /(@op) ([#&][^\x07\x2C\s]{0,200})/i,
-      /(@say) (#?[^\x07\x2C\s]{0,200}) (.+$)/i,
-      /(@nick) (.+$)/i
-    ]
-
-    /*
-      Join channel
-    */
-    let matchJoin = text.match(re[0])
-    if (matchJoin) {
-      let channel = matchJoin[2]
-      console.log(`${nick} requested bot to join ${channel}`)
-      bot.say(nick, `Joining ${channel}`)
-      bot.join(channel)
-      return
-    }
-
-    /*
-      Part channel
-    */
-    let matchPart = text.match(re[1])
-    if (matchPart) {
-      let channel = matchPart[2]
-      console.log(`${nick} requested bot to part ${channel}`)
-      bot.say(nick, `Parting ${channel}`)
-      bot.part(channel)
-      return
-    }
-
-    /*
-      Op
-    */
-    let matchOp = text.match(re[2])
-    if (matchOp) {
-      let channel = matchOp[2]
-      console.log(`${nick} requested OP in ${channel}`)
-      bot.say(nick, `OPing you in ${channel}`)
-      bot.send('MODE', channel, '+o', nick)
-      return
-    }
-
-    /*
-      Say
-    */
-    let matchSay = text.match(re[3])
-    if (matchSay) {
-      let who = matchSay[2]
-      let what = matchSay[3]
-      console.log(`${nick} requested bot to message ${who}: ${what}`)
-      bot.say(nick, `Sending message to ${who}: ${what}`)
-      bot.say(who, what)
-      return
-    }
-
-    /*
-      Swap nickname
-    */
-    let matchNick = text.match(re[4])
-    if (matchNick) {
-      let newnick = matchNick[2]
-      console.log(`${nick} requested bot to change nick to ${newnick}`)
-      bot.say(nick, `Changing nick to ${newnick}`)
-      bot.send('NICK', newnick)
-    }
-  })
+export default function ({ bot, db, config, admins, shutdown }) {
+  const channelArg = (handler, usage) => (ctx) => {
+    const channel = ctx.argv[0]
+    if (!channel || !bot.network.isChannelName(channel)) return ctx.reply(`Usage: ${usage}`)
+    return handler(ctx, channel)
+  }
 
   return {
     name: 'Simple admin',
-    actions: [{
-      command: '@join <channel>',
-      helptext: 'Joins <channel>'
+    commands: [{
+      command: '@join',
+      usage: '@join <channel>',
+      helptext: 'Joins <channel>',
+      handler: channelArg(({ nick, reply }, channel) => {
+        console.log(`${nick} requested bot to join ${channel}`)
+        reply(`Joining ${channel}`)
+        bot.join(channel)
+      }, '@join <channel>')
     }, {
-      command: '@part <channel>',
-      helptext: 'Parts <channel>'
+      command: '@part',
+      usage: '@part <channel>',
+      helptext: 'Parts <channel>',
+      handler: channelArg(({ nick, reply }, channel) => {
+        console.log(`${nick} requested bot to part ${channel}`)
+        reply(`Parting ${channel}`)
+        bot.part(channel)
+      }, '@part <channel>')
     }, {
-      command: '@op <channel>',
-      helptext: 'OPs you in <channel>'
+      command: '@op',
+      usage: '@op <channel>',
+      helptext: 'OPs you in <channel>',
+      handler: channelArg(({ nick, reply }, channel) => {
+        console.log(`${nick} requested OP in ${channel}`)
+        reply(`OPing you in ${channel}`)
+        bot.raw('MODE', channel, '+o', nick)
+      }, '@op <channel>')
     }, {
-      command: '@say <channel> <phrase>',
-      helptext: 'Says <phrase> in <channel>'
+      command: '@say',
+      usage: '@say <target> <phrase>',
+      helptext: 'Says <phrase> to <target> (a channel or a nick)',
+      handler: ({ nick, argv, args, reply }) => {
+        const who = argv[0]
+        const what = args.slice(who?.length ?? 0).trim()
+        if (!who || !what) return reply('Usage: @say <target> <phrase>')
+        console.log(`${nick} requested bot to message ${who}: ${what}`)
+        reply(`Sending message to ${who}: ${what}`)
+        bot.say(who, what)
+      }
     }, {
-      command: '@nick <nickname>',
-      helptext: 'Updates the bot <nickname>'
+      command: '@nick',
+      usage: '@nick <nickname>',
+      helptext: 'Changes the bot <nickname>',
+      handler: ({ nick, argv: [newNick], reply }) => {
+        if (!newNick) return reply('Usage: @nick <nickname>')
+        console.log(`${nick} requested bot to change nick to ${newNick}`)
+        reply(`Changing nick to ${newNick}`)
+        bot.changeNick(newNick)
+      }
+    }, {
+      command: '@flushdb',
+      usage: '@flushdb confirm',
+      helptext: 'Owner only: deletes ALL bot data (admins, auto-ops, memories, reminders, seen...), keeping only the owner',
+      handler: async ({ nick, argv: [confirm], event, reply }) => {
+        if (!await admins.isOwner(event)) return reply('Only the owner can flush the database.')
+        if (confirm !== 'confirm') {
+          return reply('This deletes ALL bot data: admins, auto-ops, memories, reminders, tells, seen and greetings. The owner is kept. Send "@flushdb confirm" to go ahead.')
+        }
+        console.log(`${nick} flushed the Redis database`)
+        // keep the owner, or nobody could manage the bot until it's restarted
+        const owner = await admins.owner()
+        await db.flushDb()
+        if (owner) await admins.setOwner(owner)
+        reply('Flushed the database. You are still the owner.')
+      }
+    }, {
+      command: '@disconnect',
+      helptext: 'Disconnects the bot and stops it; under systemd, start it again with: systemctl start alice',
+      handler: ({ nick }) => {
+        console.log(`${nick} requested bot to disconnect`)
+        bot.sayNow(nick, 'Disconnecting. Start me again with: systemctl start alice')
+        return shutdown(0, config.quitMessage)
+      }
     }]
   }
 }

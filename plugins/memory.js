@@ -1,123 +1,107 @@
-'use strict'
+import { pick } from '../lib/commands.js'
+import { scanKeys } from '../db/redis.js'
 
-const async = require('async')
+const okay = ['Okay,', 'Cool,', 'Alright,', 'Yep,', 'Sure,', 'Done,', 'Roger,', 'Fine,', 'Yes,']
+const MAX_WORDS = 30
 
-module.exports = (bot, rdb) => {
-  const re = [
-    /(!remember) (.+?) (.+$)/i,
-    /(!forget) (.+$)/i,
-    /!memory/i
-  ]
-  const okay = [
-    'Okay,',
-    'Cool,',
-    'Alright,',
-    'Yep,',
-    'Sure,',
-    'Done,',
-    'Roger,',
-    'Fine,',
-    'Yes,'
-  ]
+// "Alice?" and "alice," should both trigger "alice"
+export const normalize = (word) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
 
-  bot.on('message#', (nick, to, text) => {
-    const redisError = (err) => {
-      console.error('Error while trying to connect to Redis DB', err)
-      bot.say(to, 'Ugh, error while trying to connect to Redis DB')
+// Replacer functions, so "$&" and friends in a channel name are inserted literally
+export const fill = (phrase, { nick, channel }) =>
+  phrase.replace(/\$nick\b/gi, () => nick).replace(/\$channel\b/gi, () => channel)
+
+/*
+  Each word maps to a Redis set of phrases: memory:<word>
+*/
+export default function ({ bot, db, config }) {
+  const key = (word) => `memory:${word}`
+  const lastReply = new Map()
+
+  // Memories used to be a single string per word; turn those into sets
+  async function migrate () {
+    for (const k of await scanKeys(db, 'memory:*')) {
+      if (await db.type(k) !== 'string') continue
+      const phrase = await db.get(k)
+      await db.multi().del(k).sAdd(k, phrase).exec()
+      console.log(`Memory: migrated ${k}`)
     }
+  }
+  db.on('ready', () => migrate().catch(err => console.error('Memory migration failed', err.message)))
 
-    /*
-      Remember
-    */
-    let matchRemember = text.match(re[0])
-    if (matchRemember) {
-      let word = matchRemember[2].toLowerCase()
-      let phrase = matchRemember[3]
+  const phrasesOf = async (word) => (await db.sMembers(key(word))).sort()
 
-      rdb.set('memory:' + word, phrase, (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else {
-          bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will remember ' + word)
-        }
-      })
-      return
+  /*
+    Reply with a remembered phrase whenever someone mentions a known word,
+    at most once per cooldown per channel
+  */
+  bot.on('privmsg', async (e) => {
+    const channel = e.target
+    if (!bot.network.isChannelName(channel) || e.message.startsWith('!')) return
+    const cooldownKey = bot.caseLower(channel)
+    if (Date.now() - (lastReply.get(cooldownKey) ?? 0) < config.memoryCooldown * 1000) return
+
+    const words = [...new Set(e.message.split(/\s+/).map(normalize).filter(Boolean))].slice(0, MAX_WORDS)
+    if (words.length === 0) return
+
+    try {
+      const replies = (await Promise.all(words.map(w => db.sRandMember(key(w))))).filter(Boolean)
+      if (replies.length === 0) return
+      lastReply.set(cooldownKey, Date.now())
+      // if a message mentions several known words, take a random one
+      bot.say(channel, fill(pick(replies), { nick: e.nick, channel }))
+    } catch (err) {
+      console.error('Memory lookup failed', err.message) // not replying here to avoid channel spam
     }
-
-    /*
-      Forget
-    */
-    let matchForget = text.match(re[1])
-    if (matchForget) {
-      let word = matchForget[2].toLowerCase()
-
-      rdb.get('memory:' + word, (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else if (reply) {
-          rdb.del('memory:' + word, (err, reply) => {
-            if (err) {
-              redisError(err)
-            } else {
-              bot.say(to, okay[Math.floor(Math.random() * okay.length)] + ' will forget ' + word)
-            }
-          })
-        } else {
-          bot.say(to, `${word} is not known`)
-        }
-      })
-      return
-    }
-
-    /*
-      Memory
-    */
-    let matchMemory = text.match(re[2])
-    if (matchMemory) {
-      rdb.keys('memory:*', (err, reply) => {
-        if (err) {
-          redisError(err)
-        } else if (reply.length > 0) {
-          bot.say(to, 'Known words: ' + reply.join(', ').replace(/memory:/g, ''))
-        } else {
-          bot.say(to, 'There are no known words')
-        }
-      })
-      return
-    }
-
-    /*
-      Search Redis everytime someone says something
-    */
-    let words = text.split(' ')
-    let responses = []
-    async.each(words, (word, callback) => {
-      rdb.get('memory:' + word.toLowerCase(), (err, reply) => {
-        if (err) console.error('Error while tryivng to connect to Redis DB', err) // not using redisError here to avoid channel spam
-        if (reply) responses.push(reply) // reply is null when the key is missing
-        callback()
-      })
-    }, function (err) {
-      if (err) {
-        console.error('Error looping through words?!', err)
-      } else {
-        let randResponse = responses[Math.floor(Math.random() * responses.length)] // if a phrase matches multiple words, take a random one
-        bot.say(to, randResponse)
-      }
-    })
   })
 
   return {
     name: 'Memory',
-    actions: [{
-      command: '!remember <word> <phrase>',
-      helptext: 'Public mentions of <word> will trigger a reply with <phrase>'
+    migrate,
+    commands: [{
+      command: '!remember',
+      usage: '!remember <word> <phrase>',
+      helptext: 'Mentions of <word> will trigger a reply with <phrase>, or one of several. $nick in <phrase> becomes the speaker',
+      handler: async ({ argv, args, reply }) => {
+        const word = normalize(argv[0] ?? '')
+        const phrase = args.slice(argv[0]?.length ?? 0).trim()
+        if (!word || !phrase) return reply('Usage: !remember <word> <phrase>')
+        const [added, count] = await db.multi().sAdd(key(word), phrase).sCard(key(word)).exec()
+        if (!added) return reply(`I already know that one about ${word}`)
+        reply(`${pick(okay)} will remember ${word}` + (count > 1 ? ` (${count} phrases)` : ''))
+      }
     }, {
-      command: '!forget <word>',
-      helptext: 'Forgets <word>'
+      command: '!forget',
+      usage: '!forget <word> [number]',
+      helptext: 'Forgets <word>, or only its phrase [number] from !memory <word>',
+      handler: async ({ argv: [raw, n], reply }) => {
+        const word = normalize(raw ?? '')
+        if (!word) return reply('Usage: !forget <word> [number]')
+
+        if (n === undefined) {
+          const removed = await db.del(key(word))
+          return reply(removed ? `${pick(okay)} will forget ${word}` : `${word} is not known`)
+        }
+
+        const phrase = (await phrasesOf(word))[Number(n) - 1]
+        if (!phrase) return reply(`${word} has no phrase #${n}, see !memory ${word}`)
+        await db.sRem(key(word), phrase)
+        reply(`${pick(okay)} forgot "${phrase}"`)
+      }
     }, {
-      command: '!memory <message>',
-      helptext: 'Lists known words'
+      command: '!memory',
+      usage: '!memory [word]',
+      helptext: 'Lists known words, or the phrases for [word]',
+      handler: async ({ argv: [raw], reply }) => {
+        if (raw) {
+          const word = normalize(raw)
+          const phrases = await phrasesOf(word)
+          if (phrases.length === 0) return reply(`${word} is not known`)
+          return phrases.forEach((p, i) => reply(`${i + 1}. ${p}`))
+        }
+        const words = (await scanKeys(db, 'memory:*')).map(k => k.slice('memory:'.length))
+        reply(words.length ? `Known words: ${words.join(', ')}` : 'There are no known words')
+      }
     }]
   }
 }
