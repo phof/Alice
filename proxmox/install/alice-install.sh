@@ -42,7 +42,10 @@ ask() {
   fi
   echo "${answer:-$default}"
 }
-BOT_SERVER="$(ask "IRC server" "open.ircnet.net")"
+if [[ -t 0 ]]; then
+  echo -e "${TAB3}IRCnet servers open to everyone: https://www.ircnet.info/servers?open=true"
+fi
+BOT_SERVER="$(ask "IRC server" "hostsailor.ircnet.nl")"
 BOT_TLS="$(ask "Use TLS (true/false)" "false")"
 BOT_NICK="$(ask "Bot nickname" "Alice")"
 BOT_CHANNELS="$(ask "Channels, comma-separated" "#wonderland")"
@@ -52,6 +55,7 @@ mkdir -p /etc/alice
 cat <<CONF >/etc/alice/alice.env
 # Alice settings, see https://github.com/${ALICE_REPO}#configuration
 # Apply changes with: systemctl restart alice
+# IRCnet servers open to everyone: https://www.ircnet.info/servers?open=true
 BOT_SERVER=${BOT_SERVER}
 BOT_TLS=${BOT_TLS}
 BOT_NICK=${BOT_NICK}

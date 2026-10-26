@@ -8,10 +8,11 @@ Requires Node.js 22+ and Redis.
 
 ```sh
 yarn install
-BOT_SERVER=open.ircnet.net BOT_CHANNELS='#mychannel' yarn start
+BOT_SERVER=hostsailor.ircnet.nl BOT_CHANNELS='#mychannel' yarn start
 ```
 
-Then claim the bot, see [Owner and admins](#owner-and-admins).
+Then claim the bot, see [Owner and admins](#owner-and-admins). On IRCnet, not every server accepts
+connections from everywhere: see the [list of open servers](https://www.ircnet.info/servers?open=true).
 
 `yarn dev` restarts the bot on file changes, `yarn test` runs the tests and `yarn lint` checks style.
 Some tests need Redis: they use `TEST_REDIS_URL` (default `redis://127.0.0.1:6379/15`, **flushed** by
@@ -27,7 +28,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/phof/Alice/master/proxmo
 ```
 
 It creates an unprivileged Debian 13 container (1 CPU, 512 MB RAM, 4 GB disk) with Node.js 24 and a
-local Redis, asks for the server, nick and channels, and starts the bot as a systemd service. At the
+local Redis, asks for the server (default `hostsailor.ircnet.nl`, see the
+[open IRCnet servers](https://www.ircnet.info/servers?open=true)), nick and channels, and starts the bot as a systemd service. At the
 end it shows the `@claim` code. To install from another branch or fork, set `ALICE_BRANCH` and/or
 `ALICE_REPO` before the command, e.g. `ALICE_BRANCH=my-branch bash -c "$(curl ...)"` (the URL must
 point at the same branch).
@@ -45,7 +47,7 @@ All settings come from environment variables.
 
 | Variable | Default | |
 | --- | --- | --- |
-| `BOT_SERVER` | `localhost` | IRC server |
+| `BOT_SERVER` | `hostsailor.ircnet.nl` | IRC server, see the [open IRCnet servers](https://www.ircnet.info/servers?open=true) |
 | `BOT_PORT` | `6697` with TLS, else `6667` | |
 | `BOT_TLS` | `false` | Connect over TLS |
 | `BOT_PASSWORD` | | Server password |
