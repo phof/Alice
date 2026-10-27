@@ -69,7 +69,7 @@ All settings come from environment variables.
 | `GREET` | `true` | Set to `false` to stop greeting people who join |
 | `GREET_AFTER_DAYS` | `3` | Greet people again when they come back after this many days away |
 | `MEMORY_COOLDOWN` | `2` | Minimum seconds between two memory replies in a channel |
-| `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot is alone in a channel |
+| `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot rejoins an empty channel to regain op |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
 
 ## Owner and admins

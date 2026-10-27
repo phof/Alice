@@ -104,14 +104,25 @@ test('auto-op: rejects malformed masks', async () => {
   assert.match(bot.sent.at(-1)[2], /Usage/)
 })
 
-test('keep-op: resets the channel when alone with op, cycles without', () => {
+test('keep-op: sets +sn when alone with op, cycles without, topic only after a cycle', () => {
   const { bot } = setup(keepOp)
-  bot.emit('userlist', { channel: '#c', users: [{ nick: 'Alice', modes: ['o'] }] })
+  const alone = (modes) => bot.emit('userlist', { channel: '#c', users: [{ nick: 'Alice', modes }] })
+
+  alone(['o'])
+  assert.deepEqual(bot.sent, [['raw', 'MODE', '#c', '+sn']])
+
+  bot.sent.length = 0
+  alone([])
+  assert.deepEqual(bot.sent, [['part', '#c'], ['join', '#c']])
+
+  // the rejoin's names reply: opped again, so reset the topic once
+  bot.sent.length = 0
+  alone(['o'])
   assert.deepEqual(bot.sent, [['raw', 'MODE', '#c', '+sn'], ['raw', 'TOPIC', '#c', 'topic']])
 
   bot.sent.length = 0
-  bot.emit('userlist', { channel: '#c', users: [{ nick: 'Alice', modes: [] }] })
-  assert.deepEqual(bot.sent, [['part', '#c'], ['join', '#c']])
+  alone(['o'])
+  assert.deepEqual(bot.sent, [['raw', 'MODE', '#c', '+sn']])
 })
 
 test('keep-op: checks names when someone leaves, batched', (t) => {
