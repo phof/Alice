@@ -1,9 +1,11 @@
 /*
   When the bot is left alone in a channel: cycle it to regain op if needed,
-  otherwise reset the channel modes and topic.
+  otherwise make sure the channel is +sn. The topic is only reset after a cycle.
 */
 export default function ({ bot, config }) {
   const joined = new Set()
+  // Channels the bot parted and rejoined to regain op
+  const cycled = new Set()
   const isMe = (nick) => bot.caseCompare(nick, bot.user.nick)
 
   // Batch NAMES requests: a netsplit can make hundreds of users quit at once,
@@ -27,19 +29,22 @@ export default function ({ bot, config }) {
   bot.on('close', () => {
     joined.clear()
     pending.clear()
+    cycled.clear()
   })
 
   bot.on('userlist', ({ channel, users }) => {
+    const wasCycled = cycled.delete(bot.caseLower(channel))
     if (users.length !== 1 || !isMe(users[0].nick)) return
 
     if (!users[0].modes.includes('o')) {
       console.log(`No op, cycling ${channel}..`)
+      cycled.add(bot.caseLower(channel))
       bot.part(channel)
       bot.join(channel)
     } else {
-      console.log(`No other users on ${channel}, resetting topic/mode`)
+      console.log(`No other users on ${channel}, setting +sn`)
       bot.raw('MODE', channel, '+sn')
-      bot.raw('TOPIC', channel, config.defaultTopic)
+      if (wasCycled) bot.raw('TOPIC', channel, config.defaultTopic)
     }
   })
 
