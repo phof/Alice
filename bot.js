@@ -20,6 +20,7 @@ import tell from './plugins/tell.js'
 import remind from './plugins/remind.js'
 import flood from './plugins/flood.js'
 import greet from './plugins/greet.js'
+import rejoin from './plugins/rejoin.js'
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)))
 
@@ -32,6 +33,9 @@ const plugins = [
   // Logs
   logs,
   flood,
+
+  // Channels
+  rejoin,
 
   // Private commands
   adminCommands,
@@ -69,13 +73,13 @@ try {
 }
 
 bot.on('registered', () => {
+  // The rejoin plugin joins config.channels
   console.log(`Connected to ${config.irc.host} as ${bot.user.nick}`)
-  config.channels.forEach(channel => bot.join(channel))
 })
 
 bot.on('reconnecting', (e) => console.log(`Reconnecting (attempt ${e.attempt}/${e.max_retries})..`))
 bot.on('sasl failed', (e) => console.error('SASL authentication failed', e.reason))
-bot.on('irc error', (e) => console.error('IRC error', e.error, e.reason ?? ''))
+bot.on('irc error', (e) => console.error('IRC error', e.error, e.channel ?? e.nick ?? '', e.reason ?? ''))
 
 // irc-framework gave up (or never connected): exit and let systemd restart us
 bot.on('close', () => {
@@ -96,6 +100,7 @@ let stopping = false
 async function shutdown (code = 0, quitMessage = 'Cycling..') {
   if (stopping) return
   stopping = true
+  plugins.forEach(p => p.stop?.())
   if (bot.connected) {
     bot.quit(quitMessage)
     await new Promise(resolve => setTimeout(resolve, 1000))
