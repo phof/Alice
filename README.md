@@ -69,6 +69,7 @@ All settings come from environment variables.
 | `GREET` | `true` | Set to `false` to stop greeting people who join |
 | `GREET_AFTER_DAYS` | `3` | Greet people again when they come back after this many days away |
 | `MEMORY_COOLDOWN` | `2` | Minimum seconds between two memory replies in a channel |
+| `REJOIN_INTERVAL` | `300` | Seconds between checks that rejoin configured channels the bot isn't in (minimum 30). A rejected JOIN is retried sooner, backing off from 30 seconds up to this |
 | `DEFAULT_TOPIC` | `Imagination is the only weapon in the war against reality` | Topic set when the bot rejoins an empty channel to regain op |
 | `DEFAULT_DISCONNECT` | `We're all mad here.` | Quit message for `@disconnect` |
 
